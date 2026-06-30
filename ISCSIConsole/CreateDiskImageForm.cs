@@ -32,7 +32,7 @@ namespace ISCSIConsole
             long size = (long)numericDiskSize.Value * 1024 * 1024;
             if (path == String.Empty)
             {
-                MessageBox.Show("Please choose file location", "Error");
+                MessageBox.Show("请选择文件位置", "错误");
                 return;
             }
             m_isWorking = true;
@@ -47,7 +47,7 @@ namespace ISCSIConsole
                 {
                     this.Invoke((MethodInvoker)delegate()
                     {
-                        MessageBox.Show("Failed to create the disk: " + ex.Message, "Error");
+                        MessageBox.Show("创建磁盘失败: " + ex.Message, "错误");
                         txtFilePath.Enabled = true;
                         btnBrowse.Enabled = true;
                         numericDiskSize.Enabled = true;
@@ -62,7 +62,7 @@ namespace ISCSIConsole
                 {
                     this.Invoke((MethodInvoker)delegate()
                     {
-                        MessageBox.Show("Cannot lock the disk image for exclusive access", "Error");
+                        MessageBox.Show("无法以独占方式锁定磁盘镜像", "错误");
                         txtFilePath.Enabled = true;
                         btnBrowse.Enabled = true;
                         numericDiskSize.Enabled = true;
@@ -109,7 +109,7 @@ namespace ISCSIConsole
             if (m_isWorking)
             {
                 e.Cancel = true;
-                MessageBox.Show("Please wait until the creation of the disk image is completed.", "Error");
+                MessageBox.Show("请等待磁盘镜像创建完成。", "错误");
             }
         }
     }

@@ -50,7 +50,7 @@ namespace ISCSIConsole
             this.btnAddDiskImage.Name = "btnAddDiskImage";
             this.btnAddDiskImage.Size = new System.Drawing.Size(140, 23);
             this.btnAddDiskImage.TabIndex = 4;
-            this.btnAddDiskImage.Text = "Add Existing Virtual Disk";
+            this.btnAddDiskImage.Text = "添加现有虚拟磁盘";
             this.btnAddDiskImage.UseVisualStyleBackColor = true;
             this.btnAddDiskImage.Click += new System.EventHandler(this.btnAddDiskImage_Click);
             // 
@@ -60,7 +60,7 @@ namespace ISCSIConsole
             this.btnAddPhysicalDisk.Name = "btnAddPhysicalDisk";
             this.btnAddPhysicalDisk.Size = new System.Drawing.Size(140, 23);
             this.btnAddPhysicalDisk.TabIndex = 5;
-            this.btnAddPhysicalDisk.Text = "Add Physical Disk";
+            this.btnAddPhysicalDisk.Text = "添加物理磁盘";
             this.btnAddPhysicalDisk.UseVisualStyleBackColor = true;
             this.btnAddPhysicalDisk.Visible = false;
             this.btnAddPhysicalDisk.Click += new System.EventHandler(this.btnAddPhysicalDisk_Click);
@@ -88,7 +88,7 @@ namespace ISCSIConsole
             this.label2.Name = "label2";
             this.label2.Size = new System.Drawing.Size(36, 13);
             this.label2.TabIndex = 6;
-            this.label2.Text = "Disks:";
+            this.label2.Text = "磁盘:";
             // 
             // btnOK
             // 
@@ -96,7 +96,7 @@ namespace ISCSIConsole
             this.btnOK.Name = "btnOK";
             this.btnOK.Size = new System.Drawing.Size(75, 23);
             this.btnOK.TabIndex = 8;
-            this.btnOK.Text = "OK";
+            this.btnOK.Text = "确定";
             this.btnOK.UseVisualStyleBackColor = true;
             this.btnOK.Click += new System.EventHandler(this.btnOK_Click);
             // 
@@ -107,7 +107,7 @@ namespace ISCSIConsole
             this.btnCancel.Name = "btnCancel";
             this.btnCancel.Size = new System.Drawing.Size(75, 23);
             this.btnCancel.TabIndex = 9;
-            this.btnCancel.Text = "Cancel";
+            this.btnCancel.Text = "取消";
             this.btnCancel.UseVisualStyleBackColor = true;
             this.btnCancel.Click += new System.EventHandler(this.btnCancel_Click);
             // 
@@ -129,12 +129,12 @@ namespace ISCSIConsole
             // 
             // columnDescription
             // 
-            this.columnDescription.Text = "Description";
+            this.columnDescription.Text = "描述";
             this.columnDescription.Width = 211;
             // 
             // columnSize
             // 
-            this.columnSize.Text = "Size";
+            this.columnSize.Text = "大小";
             // 
             // btnAddVolume
             // 
@@ -142,7 +142,7 @@ namespace ISCSIConsole
             this.btnAddVolume.Name = "btnAddVolume";
             this.btnAddVolume.Size = new System.Drawing.Size(140, 23);
             this.btnAddVolume.TabIndex = 6;
-            this.btnAddVolume.Text = "Add Volume";
+            this.btnAddVolume.Text = "添加卷";
             this.btnAddVolume.UseVisualStyleBackColor = true;
             this.btnAddVolume.Visible = false;
             this.btnAddVolume.Click += new System.EventHandler(this.btnAddVolume_Click);
@@ -153,7 +153,7 @@ namespace ISCSIConsole
             this.btnCreateDiskImage.Name = "btnCreateDiskImage";
             this.btnCreateDiskImage.Size = new System.Drawing.Size(140, 23);
             this.btnCreateDiskImage.TabIndex = 3;
-            this.btnCreateDiskImage.Text = "Create Virtual Disk";
+            this.btnCreateDiskImage.Text = "创建虚拟磁盘";
             this.btnCreateDiskImage.UseVisualStyleBackColor = true;
             this.btnCreateDiskImage.Click += new System.EventHandler(this.btnCreateDiskImage_Click);
             // 
@@ -164,7 +164,7 @@ namespace ISCSIConsole
             this.btnRemove.Name = "btnRemove";
             this.btnRemove.Size = new System.Drawing.Size(140, 23);
             this.btnRemove.TabIndex = 7;
-            this.btnRemove.Text = "Remove";
+            this.btnRemove.Text = "移除";
             this.btnRemove.UseVisualStyleBackColor = true;
             this.btnRemove.Click += new System.EventHandler(this.btnRemove_Click);
             // 
@@ -193,7 +193,7 @@ namespace ISCSIConsole
             this.MinimumSize = new System.Drawing.Size(500, 260);
             this.Name = "AddTargetForm";
             this.SizeGripStyle = System.Windows.Forms.SizeGripStyle.Hide;
-            this.Text = "Add iSCSI Target";
+            this.Text = "添加 iSCSI 目标";
             this.Deactivate += new System.EventHandler(this.AddTargetForm_Deactivate);
             this.Load += new System.EventHandler(this.AddTargetForm_Load);
             this.KeyUp += new System.Windows.Forms.KeyEventHandler(this.AddTargetForm_KeyUp);

@@ -35,7 +35,7 @@ namespace ISCSIConsole
             }
             catch (OutOfMemoryException)
             {
-                MessageBox.Show("Not enough memory available", "Error");
+                MessageBox.Show("可用内存不足", "错误");
                 return;
             }
             m_ramDisk = disk;

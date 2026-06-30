@@ -27,7 +27,7 @@ namespace ISCSIConsole
             for(int index = 0; index < volumes.Count; index++)
             {
                 Volume volume = volumes[index];
-                string title = String.Format("Volume {0}", index);
+                string title = String.Format("卷 {0}", index);
                 string type = VolumeHelper.GetVolumeTypeString(volume);
                 string status = VolumeHelper.GetVolumeStatusString(volume);
 
@@ -59,7 +59,7 @@ namespace ISCSIConsole
                 Volume selectedVolume = (Volume)listVolumes.SelectedItems[0].Tag;
                 if (selectedVolume is DynamicVolume && !((DynamicVolume)selectedVolume).IsOperational)
                 {
-                    MessageBox.Show("The selected volume is not operational", "Error");
+                    MessageBox.Show("所选卷不可用", "错误");
                     return;
                 }
                 if (!chkReadOnly.Checked)
@@ -71,7 +71,7 @@ namespace ISCSIConsole
                     }
                     catch (Exception ex)
                     {
-                        MessageBox.Show(ex.Message, "Error");
+                        MessageBox.Show(ex.Message, "错误");
                         return;
                     }
 
@@ -84,7 +84,7 @@ namespace ISCSIConsole
                             // We either have to take the disk(s) offline or use the OS volume handle for write operations.
                             if (!volumeGuid.HasValue)
                             {
-                                MessageBox.Show("The selected volume is not recognized by your operating system");
+                                MessageBox.Show("操作系统无法识别所选卷");
                                 return;
                             }
                             selectedVolume = new OperatingSystemVolume(volumeGuid.Value, selectedVolume.BytesPerSector, selectedVolume.Size, chkReadOnly.Checked);
@@ -97,7 +97,7 @@ namespace ISCSIConsole
                         }
                         if (!isLocked)
                         {
-                            MessageBox.Show("Unable to lock the volume", "Error");
+                            MessageBox.Show("无法锁定卷", "错误");
                             return;
                         }
                     }
@@ -109,7 +109,7 @@ namespace ISCSIConsole
             }
             else
             {
-                MessageBox.Show("No volume was selected", "Error");
+                MessageBox.Show("未选择卷", "错误");
                 return;
             }
         }

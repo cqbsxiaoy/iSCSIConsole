@@ -25,12 +25,12 @@ namespace ISCSIConsole
             List<PhysicalDisk> physicalDisks = PhysicalDiskHelper.GetPhysicalDisks();
             if (Environment.OSVersion.Version.Major >= 6)
             {
-                listPhysicalDisks.Columns.Add("Status", 60);
+                listPhysicalDisks.Columns.Add("状态", 60);
                 columnDescription.Width -= 60;
             }
             foreach (PhysicalDisk physicalDisk in physicalDisks)
             {
-                string title = String.Format("Disk {0}", physicalDisk.PhysicalDiskIndex);
+                string title = String.Format("磁盘 {0}", physicalDisk.PhysicalDiskIndex);
                 string description = physicalDisk.Description;
                 string serialNumber = physicalDisk.SerialNumber;
                 string sizeString = FormattingHelper.GetStandardSizeString(physicalDisk.Size);
@@ -48,7 +48,7 @@ namespace ISCSIConsole
                     catch (Exception)
                     {
                     }
-                    string status = isOnline.HasValue ? (isOnline.Value ? "Online" : "Offline") : "N/A";
+                    string status = isOnline.HasValue ? (isOnline.Value ? "联机" : "脱机") : "未知";
                     item.SubItems.Add(status);
                 }
                 item.Tag = physicalDisk;
@@ -65,7 +65,7 @@ namespace ISCSIConsole
             }
             else
             {
-                MessageBox.Show("No disk was selected", "Error");
+                MessageBox.Show("未选择磁盘", "错误");
                 return;
             }
             if (!chkReadOnly.Checked)
@@ -80,25 +80,25 @@ namespace ISCSIConsole
                     }
                     catch (Exception ex)
                     {
-                        MessageBox.Show(ex.Message, "Error");
+                        MessageBox.Show(ex.Message, "错误");
                         return;
                     }
 
                     if (isDiskReadOnly)
                     {
-                        MessageBox.Show("The selected disk is set to readonly", "Error");
+                        MessageBox.Show("所选磁盘已设置为只读", "错误");
                         return;
                     }
 
                     if (isOnline)
                     {
-                        DialogResult result = MessageBox.Show("The selected disk will now be taken offline. OK?", String.Empty, MessageBoxButtons.OKCancel);
+                        DialogResult result = MessageBox.Show("所选磁盘将被设置为脱机。是否继续?", String.Empty, MessageBoxButtons.OKCancel);
                         if (result == DialogResult.OK)
                         {
                             bool success = selectedDisk.SetOnlineStatus(false);
                             if (!success)
                             {
-                                MessageBox.Show("Was not able to take the disk offline", "Error");
+                                MessageBox.Show("无法将磁盘设置为脱机", "错误");
                                 return;
                             }
                         }
@@ -115,7 +115,7 @@ namespace ISCSIConsole
                         // The user will probably want to stop the Logical Disk Manager services (vds, dmadmin, dmserver)
                         // and lock all dynamic disks and dynamic volumes before whatever he's doing.
                         // Modifications the the LDM database should be applied to all dynamic disks.
-                        DialogResult result = MessageBox.Show("The dynamic disk database will likely be corrupted, Continue?", "Warning", MessageBoxButtons.YesNo);
+                        DialogResult result = MessageBox.Show("动态磁盘数据库可能会损坏。是否继续?", "警告", MessageBoxButtons.YesNo);
                         if (result != DialogResult.Yes)
                         {
                             return;
@@ -128,12 +128,12 @@ namespace ISCSIConsole
                         LockStatus status = LockHelper.LockBasicDiskAndVolumesOrNone(selectedDisk);
                         if (status == LockStatus.CannotLockDisk)
                         {
-                            MessageBox.Show("Unable to lock the disk", "Error");
+                            MessageBox.Show("无法锁定磁盘", "错误");
                             return;
                         }
                         else if (status == LockStatus.CannotLockVolume)
                         {
-                            MessageBox.Show("Unable to lock one of the volumes on the disk", "Error");
+                            MessageBox.Show("无法锁定磁盘上的某个卷", "错误");
                             return;
                         }
                     }

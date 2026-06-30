@@ -44,7 +44,7 @@ namespace ISCSIConsole
             // saveVirtualDiskFileDialog
             // 
             this.saveVirtualDiskFileDialog.FileName = "Disk.vhd";
-            this.saveVirtualDiskFileDialog.Filter = "Virtual Hard Disk (*.vhd)|*.vhd";
+            this.saveVirtualDiskFileDialog.Filter = "虚拟硬盘 (*.vhd)|*.vhd";
             // 
             // numericDiskSize
             // 
@@ -76,7 +76,7 @@ namespace ISCSIConsole
             this.lblSize.Name = "lblSize";
             this.lblSize.Size = new System.Drawing.Size(30, 13);
             this.lblSize.TabIndex = 3;
-            this.lblSize.Text = "Size:";
+            this.lblSize.Text = "大小:";
             // 
             // label1
             // 
@@ -94,7 +94,7 @@ namespace ISCSIConsole
             this.lblFilePath.Name = "lblFilePath";
             this.lblFilePath.Size = new System.Drawing.Size(26, 13);
             this.lblFilePath.TabIndex = 0;
-            this.lblFilePath.Text = "File:";
+            this.lblFilePath.Text = "文件:";
             // 
             // txtFilePath
             // 
@@ -109,7 +109,7 @@ namespace ISCSIConsole
             this.btnBrowse.Name = "btnBrowse";
             this.btnBrowse.Size = new System.Drawing.Size(75, 23);
             this.btnBrowse.TabIndex = 2;
-            this.btnBrowse.Text = "Browse..";
+            this.btnBrowse.Text = "浏览...";
             this.btnBrowse.UseVisualStyleBackColor = true;
             this.btnBrowse.Click += new System.EventHandler(this.btnBrowse_Click);
             // 
@@ -119,7 +119,7 @@ namespace ISCSIConsole
             this.btnOK.Name = "btnOK";
             this.btnOK.Size = new System.Drawing.Size(75, 23);
             this.btnOK.TabIndex = 6;
-            this.btnOK.Text = "OK";
+            this.btnOK.Text = "确定";
             this.btnOK.UseVisualStyleBackColor = true;
             this.btnOK.Click += new System.EventHandler(this.btnOK_Click);
             // 
@@ -130,7 +130,7 @@ namespace ISCSIConsole
             this.btnCancel.Name = "btnCancel";
             this.btnCancel.Size = new System.Drawing.Size(75, 23);
             this.btnCancel.TabIndex = 7;
-            this.btnCancel.Text = "Cancel";
+            this.btnCancel.Text = "取消";
             this.btnCancel.UseVisualStyleBackColor = true;
             this.btnCancel.Click += new System.EventHandler(this.btnCancel_Click);
             // 
@@ -155,7 +155,7 @@ namespace ISCSIConsole
             this.MinimumSize = new System.Drawing.Size(400, 150);
             this.Name = "CreateDiskImageForm";
             this.SizeGripStyle = System.Windows.Forms.SizeGripStyle.Hide;
-            this.Text = "Create Virtual Disk";
+            this.Text = "创建虚拟磁盘";
             this.FormClosing += new System.Windows.Forms.FormClosingEventHandler(this.CreateDiskImageForm_FormClosing);
             ((System.ComponentModel.ISupportInitialize)(this.numericDiskSize)).EndInit();
             this.ResumeLayout(false);

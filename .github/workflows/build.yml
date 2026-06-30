@@ -1,0 +1,57 @@
+name: Build iSCSI Console
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build Windows package
+    runs-on: windows-2022
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Restore
+        run: msbuild ISCSIConsole/ISCSIConsole.csproj /t:Restore /p:Configuration=Release /p:TargetFramework=net472
+
+      - name: Build
+        run: >
+          msbuild ISCSIConsole/ISCSIConsole.csproj
+          /p:Configuration=Release
+          /p:TargetFramework=net472
+          /p:SkipILMerge=true
+          /p:SkipILRepack=true
+
+      - name: Collect files
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path artifacts/iSCSIConsole-net472 -Force | Out-Null
+          Copy-Item -Path ISCSIConsole/bin/Release/net472/* -Destination artifacts/iSCSIConsole-net472/ -Recurse
+
+      - name: Copy license and readme
+        shell: pwsh
+        run: |
+          Copy-Item -LiteralPath License.txt -Destination artifacts/iSCSIConsole-net472/
+          Copy-Item -LiteralPath Readme.md -Destination artifacts/iSCSIConsole-net472/
+
+      - name: Create archive
+        shell: pwsh
+        run: |
+          Compress-Archive -Path artifacts/iSCSIConsole-net472/* -DestinationPath artifacts/iSCSIConsole-net472.zip -Force
+
+      - name: Upload package
+        uses: actions/upload-artifact@v4
+        with:
+          name: iSCSIConsole-net472
+          path: artifacts/iSCSIConsole-net472.zip
+          if-no-files-found: error

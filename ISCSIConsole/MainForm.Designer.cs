@@ -49,7 +49,7 @@ namespace ISCSIConsole
             this.btnStart.Name = "btnStart";
             this.btnStart.Size = new System.Drawing.Size(106, 23);
             this.btnStart.TabIndex = 4;
-            this.btnStart.Text = "Start";
+            this.btnStart.Text = "启动";
             this.btnStart.UseVisualStyleBackColor = true;
             this.btnStart.Click += new System.EventHandler(this.btnStart_Click);
             // 
@@ -60,7 +60,7 @@ namespace ISCSIConsole
             this.lblPort.Name = "lblPort";
             this.lblPort.Size = new System.Drawing.Size(53, 13);
             this.lblPort.TabIndex = 2;
-            this.lblPort.Text = "TCP Port:";
+            this.lblPort.Text = "TCP 端口:";
             // 
             // txtPort
             // 
@@ -77,7 +77,7 @@ namespace ISCSIConsole
             this.lblIPAddress.Name = "lblIPAddress";
             this.lblIPAddress.Size = new System.Drawing.Size(61, 13);
             this.lblIPAddress.TabIndex = 0;
-            this.lblIPAddress.Text = "IP Address:";
+            this.lblIPAddress.Text = "IP 地址:";
             // 
             // comboIPAddress
             // 
@@ -94,7 +94,7 @@ namespace ISCSIConsole
             this.btnAddTarget.Name = "btnAddTarget";
             this.btnAddTarget.Size = new System.Drawing.Size(106, 23);
             this.btnAddTarget.TabIndex = 7;
-            this.btnAddTarget.Text = "Add Target";
+            this.btnAddTarget.Text = "添加目标";
             this.btnAddTarget.UseVisualStyleBackColor = true;
             this.btnAddTarget.Click += new System.EventHandler(this.btnAddTarget_Click);
             // 
@@ -105,7 +105,7 @@ namespace ISCSIConsole
             this.lblTargets.Name = "lblTargets";
             this.lblTargets.Size = new System.Drawing.Size(46, 13);
             this.lblTargets.TabIndex = 5;
-            this.lblTargets.Text = "Targets:";
+            this.lblTargets.Text = "目标:";
             // 
             // btnRemoveTarget
             // 
@@ -114,7 +114,7 @@ namespace ISCSIConsole
             this.btnRemoveTarget.Name = "btnRemoveTarget";
             this.btnRemoveTarget.Size = new System.Drawing.Size(106, 23);
             this.btnRemoveTarget.TabIndex = 8;
-            this.btnRemoveTarget.Text = "Remove Target";
+            this.btnRemoveTarget.Text = "移除目标";
             this.btnRemoveTarget.UseVisualStyleBackColor = true;
             this.btnRemoveTarget.Click += new System.EventHandler(this.btnRemoveTarget_Click);
             // 
@@ -165,7 +165,7 @@ namespace ISCSIConsole
             this.MinimumSize = new System.Drawing.Size(480, 220);
             this.Name = "MainForm";
             this.SizeGripStyle = System.Windows.Forms.SizeGripStyle.Hide;
-            this.Text = "iSCSI Console";
+            this.Text = "iSCSI 控制台";
             this.Load += new System.EventHandler(this.MainForm_Load);
             this.statusStrip1.ResumeLayout(false);
             this.statusStrip1.PerformLayout();

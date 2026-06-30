@@ -29,7 +29,7 @@ namespace ISCSIConsole
             string path = txtFilePath.Text;
             if (path == String.Empty)
             {
-                MessageBox.Show("Please choose file location.", "Error");
+                MessageBox.Show("请选择文件位置。", "错误");
                 return;
             }
             DiskImage diskImage;
@@ -39,17 +39,17 @@ namespace ISCSIConsole
             }
             catch (IOException ex)
             {
-                MessageBox.Show("Can't open disk image: " + ex.Message, "Error");
+                MessageBox.Show("无法打开磁盘镜像: " + ex.Message, "错误");
                 return;
             }
             catch (InvalidDataException ex)
             {
-                MessageBox.Show("Invalid disk image: " + ex.Message, "Error");
+                MessageBox.Show("磁盘镜像无效: " + ex.Message, "错误");
                 return;
             }
             catch (NotImplementedException)
             {
-                MessageBox.Show("Unsupported Disk Image Format", "Error");
+                MessageBox.Show("不支持的磁盘镜像格式", "错误");
                 return;
             }
 
@@ -63,7 +63,7 @@ namespace ISCSIConsole
             }
             if (!isLocked)
             {
-                MessageBox.Show("Cannot lock the disk image for exclusive access.", "Error");
+                MessageBox.Show("无法以独占方式锁定磁盘镜像。", "错误");
                 return;
             }
             m_diskImage = diskImage;

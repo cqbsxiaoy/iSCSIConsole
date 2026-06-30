@@ -41,15 +41,15 @@ namespace ISCSIConsole
                     bool success = OpenLogFile(path);
                     if (!success)
                     {
-                        MessageBox.Show("Cannot open log file", "Error");
+                        MessageBox.Show("无法打开日志文件", "错误");
                     }
                 }
                 else
                 {
                     StringBuilder builder = new StringBuilder();
-                    builder.AppendLine("Command line arguments:");
-                    builder.AppendLine("/log - will write log file to executable directory");
-                    MessageBox.Show(builder.ToString(), "Error");
+                    builder.AppendLine("命令行参数:");
+                    builder.AppendLine("/log - 将日志文件写入可执行文件所在目录");
+                    MessageBox.Show(builder.ToString(), "错误");
                     return;
                 }
             }
@@ -74,8 +74,8 @@ namespace ISCSIConsole
 
         private static void HandleUnhandledException(Exception ex)
         {
-            string message = String.Format("Exception: {0}: {1} Source: {2} {3}", ex.GetType(), ex.Message, ex.Source, ex.StackTrace);
-            MessageBox.Show(message, "Error");
+            string message = String.Format("异常: {0}: {1} 来源: {2} {3}", ex.GetType(), ex.Message, ex.Source, ex.StackTrace);
+            MessageBox.Show(message, "错误");
             Application.Exit();
         }
     }

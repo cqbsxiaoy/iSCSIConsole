@@ -106,15 +106,15 @@ namespace ISCSIConsole
             }
             else if (disk is RAMDisk)
             {
-                description = "RAM Disk";
+                description = "RAM 磁盘";
             }
             else if (disk is PhysicalDisk) // Win32 only
             {
-                description = String.Format("Physical Disk {0}", ((PhysicalDisk)disk).PhysicalDiskIndex);
+                description = String.Format("物理磁盘 {0}", ((PhysicalDisk)disk).PhysicalDiskIndex);
             }
             else if (disk is VolumeDisk) // Win32 only
             {
-                description = String.Format("Volume");
+                description = String.Format("卷");
             }
 
             ListViewItem item = new ListViewItem(description);
@@ -138,7 +138,7 @@ namespace ISCSIConsole
         {
             if (!ISCSINameHelper.IsValidIQN(txtTargetIQN.Text))
             {
-                MessageBox.Show("Target IQN is invalid", "Error");
+                MessageBox.Show("目标 IQN 无效", "错误");
                 return;
             }
             m_target = new ISCSITarget(txtTargetIQN.Text, m_disks);
@@ -184,18 +184,18 @@ namespace ISCSIConsole
         {
             if (e.Control)
             {
-                btnCreateDiskImage.Text = "Create RAM Disk";
+                btnCreateDiskImage.Text = "创建 RAM 磁盘";
             }
         }
 
         private void AddTargetForm_KeyUp(object sender, KeyEventArgs e)
         {
-            btnCreateDiskImage.Text = "Create Virtual Disk";
+            btnCreateDiskImage.Text = "创建虚拟磁盘";
         }
 
         private void AddTargetForm_Deactivate(object sender, EventArgs e)
         {
-            btnCreateDiskImage.Text = "Create Virtual Disk";
+            btnCreateDiskImage.Text = "创建虚拟磁盘";
         }
     }
 }

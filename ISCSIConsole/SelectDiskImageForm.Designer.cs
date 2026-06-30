@@ -45,7 +45,7 @@ namespace ISCSIConsole
             this.lblFilePath.Name = "lblFilePath";
             this.lblFilePath.Size = new System.Drawing.Size(26, 13);
             this.lblFilePath.TabIndex = 3;
-            this.lblFilePath.Text = "File:";
+            this.lblFilePath.Text = "文件:";
             // 
             // txtFilePath
             // 
@@ -60,7 +60,7 @@ namespace ISCSIConsole
             this.btnBrowse.Name = "btnBrowse";
             this.btnBrowse.Size = new System.Drawing.Size(75, 23);
             this.btnBrowse.TabIndex = 5;
-            this.btnBrowse.Text = "Browse..";
+            this.btnBrowse.Text = "浏览...";
             this.btnBrowse.UseVisualStyleBackColor = true;
             this.btnBrowse.Click += new System.EventHandler(this.btnBrowse_Click);
             // 
@@ -70,7 +70,7 @@ namespace ISCSIConsole
             this.btnOK.Name = "btnOK";
             this.btnOK.Size = new System.Drawing.Size(75, 23);
             this.btnOK.TabIndex = 6;
-            this.btnOK.Text = "OK";
+            this.btnOK.Text = "确定";
             this.btnOK.UseVisualStyleBackColor = true;
             this.btnOK.Click += new System.EventHandler(this.btnOK_Click);
             // 
@@ -81,7 +81,7 @@ namespace ISCSIConsole
             this.btnCancel.Name = "btnCancel";
             this.btnCancel.Size = new System.Drawing.Size(75, 23);
             this.btnCancel.TabIndex = 7;
-            this.btnCancel.Text = "Cancel";
+            this.btnCancel.Text = "取消";
             this.btnCancel.UseVisualStyleBackColor = true;
             this.btnCancel.Click += new System.EventHandler(this.btnCancel_Click);
             // 
@@ -92,7 +92,7 @@ namespace ISCSIConsole
             this.chkReadOnly.Name = "chkReadOnly";
             this.chkReadOnly.Size = new System.Drawing.Size(74, 17);
             this.chkReadOnly.TabIndex = 8;
-            this.chkReadOnly.Text = "Read only";
+            this.chkReadOnly.Text = "只读";
             this.chkReadOnly.UseVisualStyleBackColor = true;
             // 
             // openDiskImageDialog
@@ -118,7 +118,7 @@ namespace ISCSIConsole
             this.MinimumSize = new System.Drawing.Size(400, 150);
             this.Name = "SelectDiskImageForm";
             this.SizeGripStyle = System.Windows.Forms.SizeGripStyle.Hide;
-            this.Text = "Select Disk Image";
+            this.Text = "选择磁盘镜像";
             this.ResumeLayout(false);
             this.PerformLayout();
 

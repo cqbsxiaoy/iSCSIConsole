@@ -46,7 +46,7 @@ namespace ISCSIConsole
             this.btnCancel.Name = "btnCancel";
             this.btnCancel.Size = new System.Drawing.Size(75, 23);
             this.btnCancel.TabIndex = 3;
-            this.btnCancel.Text = "Cancel";
+            this.btnCancel.Text = "取消";
             this.btnCancel.UseVisualStyleBackColor = true;
             this.btnCancel.Click += new System.EventHandler(this.btnCancel_Click);
             // 
@@ -56,7 +56,7 @@ namespace ISCSIConsole
             this.btnOK.Name = "btnOK";
             this.btnOK.Size = new System.Drawing.Size(75, 23);
             this.btnOK.TabIndex = 2;
-            this.btnOK.Text = "OK";
+            this.btnOK.Text = "确定";
             this.btnOK.UseVisualStyleBackColor = true;
             this.btnOK.Click += new System.EventHandler(this.btnOK_Click);
             // 
@@ -67,7 +67,7 @@ namespace ISCSIConsole
             this.chkReadOnly.Name = "chkReadOnly";
             this.chkReadOnly.Size = new System.Drawing.Size(76, 17);
             this.chkReadOnly.TabIndex = 1;
-            this.chkReadOnly.Text = "Read Only";
+            this.chkReadOnly.Text = "只读";
             this.chkReadOnly.UseVisualStyleBackColor = true;
             // 
             // listPhysicalDisks
@@ -88,21 +88,21 @@ namespace ISCSIConsole
             // 
             // columnDisk
             // 
-            this.columnDisk.Text = "Disk";
+            this.columnDisk.Text = "磁盘";
             // 
             // columnDescription
             // 
-            this.columnDescription.Text = "Description";
+            this.columnDescription.Text = "描述";
             this.columnDescription.Width = 210;
             // 
             // columnSerialNumber
             // 
-            this.columnSerialNumber.Text = "Serial Number";
+            this.columnSerialNumber.Text = "序列号";
             this.columnSerialNumber.Width = 134;
             // 
             // columnSize
             // 
-            this.columnSize.Text = "Size";
+            this.columnSize.Text = "大小";
             this.columnSize.TextAlign = System.Windows.Forms.HorizontalAlignment.Right;
             // 
             // SelectPhysicalDiskForm
@@ -122,7 +122,7 @@ namespace ISCSIConsole
             this.MinimumSize = new System.Drawing.Size(500, 250);
             this.Name = "SelectPhysicalDiskForm";
             this.SizeGripStyle = System.Windows.Forms.SizeGripStyle.Hide;
-            this.Text = "Select Physical Disk";
+            this.Text = "选择物理磁盘";
             this.Load += new System.EventHandler(this.SelectPhysicalDiskForm_Load);
             this.ResumeLayout(false);
             this.PerformLayout();

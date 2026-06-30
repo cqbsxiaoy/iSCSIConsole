@@ -39,7 +39,7 @@ namespace ISCSIConsole
 
             List<IPAddress> localIPs = GetHostIPAddresses();
             KeyValuePairList<string, IPAddress> list = new KeyValuePairList<string, IPAddress>();
-            list.Add("Any", IPAddress.Any);
+            list.Add("任意", IPAddress.Any);
             foreach (IPAddress address in localIPs)
             {
                 list.Add(address.ToString(), address);
@@ -47,11 +47,11 @@ namespace ISCSIConsole
             comboIPAddress.DataSource = list;
             comboIPAddress.DisplayMember = "Key";
             comboIPAddress.ValueMember = "Value";
-            lblStatus.Text = "Author: Tal Aloni (tal.aloni.il@gmail.com)";
+            lblStatus.Text = "作者: Tal Aloni (tal.aloni.il@gmail.com)";
 
             if (RuntimeHelper.IsWin32 && !SecurityHelper.IsAdministrator())
             {
-                lblStatus.Text = "Some features require administrator privileges and have been disabled";
+                lblStatus.Text = "部分功能需要管理员权限，已被禁用";
             }
         }
 
@@ -63,7 +63,7 @@ namespace ISCSIConsole
                 int port = Conversion.ToInt32(txtPort.Text, 0);
                 if (port <= 0 || port > UInt16.MaxValue)
                 {
-                    MessageBox.Show("Invalid TCP port", "Error");
+                    MessageBox.Show("TCP 端口无效", "错误");
                     return;
                 }
                 IPEndPoint endpoint = new IPEndPoint(serverAddress, port);
@@ -73,10 +73,10 @@ namespace ISCSIConsole
                 }
                 catch (SocketException ex)
                 {
-                    MessageBox.Show("Cannot start server, " + ex.Message, "Error");
+                    MessageBox.Show("无法启动服务器: " + ex.Message, "错误");
                     return;
                 }
-                btnStart.Text = "Stop";
+                btnStart.Text = "停止";
                 txtPort.Enabled = false;
                 comboIPAddress.Enabled = false;
                 m_started = true;
@@ -87,7 +87,7 @@ namespace ISCSIConsole
                 m_server.Stop();
                 lblStatus.Text = String.Empty;
                 m_started = false;
-                btnStart.Text = "Start";
+                btnStart.Text = "启动";
                 txtPort.Enabled = true;
                 comboIPAddress.Enabled = true;
             }
@@ -110,7 +110,7 @@ namespace ISCSIConsole
                 }
                 catch (ArgumentException ex)
                 {
-                    MessageBox.Show(ex.Message, "Error");
+                    MessageBox.Show(ex.Message, "错误");
                     return;
                 }
                 listTargets.Items.Add(target.TargetName);
@@ -126,7 +126,7 @@ namespace ISCSIConsole
                 bool isTargetRemoved = m_server.RemoveTarget(target.TargetName);
                 if (!isTargetRemoved)
                 {
-                    MessageBox.Show("Could not remove iSCSI target", "Error");
+                    MessageBox.Show("无法移除 iSCSI 目标", "错误");
                     return;
                 }
                 List<Disk> disks = ((SCSI.VirtualSCSITarget)target.SCSITarget).Disks;
@@ -160,7 +160,7 @@ namespace ISCSIConsole
             {
                 if (m_started)
                 {
-                    lblStatus.Text = String.Format("{0} Active Sessions", m_usageCounter.SessionCount);
+                    lblStatus.Text = String.Format("{0} 个活动会话", m_usageCounter.SessionCount);
                 }
 
                 if (listTargets.SelectedIndices.Count > 0)
