@@ -24,8 +24,11 @@ jobs:
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
 
+      - name: Install ILMerge
+        run: nuget install ILMerge -Version 3.0.41 -OutputDirectory tools
+
       - name: Restore
-        run: msbuild ISCSIConsole/ISCSIConsole.csproj /t:Restore /p:Configuration=Release /p:TargetFramework=net472
+        run: msbuild ISCSIConsole/ISCSIConsole.csproj /t:Restore /p:Configuration=Release /p:TargetFramework=net472 /p:SkipILRepack=true
 
       - name: Build
         run: >
@@ -35,11 +38,27 @@ jobs:
           /p:SkipILMerge=true
           /p:SkipILRepack=true
 
+      - name: Merge single executable
+        shell: pwsh
+        run: |
+          & ISCSIConsole/ILMerge/ILMerge.bat net472
+          if ($LASTEXITCODE -ne 0) {
+            Write-Warning "ILMerge failed. The package will fall back to the normal exe/dll layout."
+            exit 0
+          }
+
       - name: Collect files
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Path artifacts/iSCSIConsole-net472 -Force | Out-Null
-          Copy-Item -Path ISCSIConsole/bin/Release/net472/* -Destination artifacts/iSCSIConsole-net472/ -Recurse
+          $mergedExe = "ISCSIConsole/bin/ILMerge/net472/ISCSIConsole.exe"
+          if (Test-Path $mergedExe) {
+            Copy-Item -LiteralPath $mergedExe -Destination artifacts/iSCSIConsole-net472/
+          } else {
+            Copy-Item -Path ISCSIConsole/bin/Release/net472/*.exe -Destination artifacts/iSCSIConsole-net472/
+            Copy-Item -Path ISCSIConsole/bin/Release/net472/*.dll -Destination artifacts/iSCSIConsole-net472/
+            Copy-Item -Path ISCSIConsole/bin/Release/net472/*.config -Destination artifacts/iSCSIConsole-net472/ -ErrorAction SilentlyContinue
+          }
 
       - name: Copy license and readme
         shell: pwsh

@@ -18,7 +18,9 @@ namespace ISCSIConsole
         public const string DefaultTargetIQN = "iqn.1991-05.com.microsoft";
 
         private List<Disk> m_disks = new List<Disk>();
+        private List<DiskConfiguration> m_diskConfigurations = new List<DiskConfiguration>();
         private ISCSITarget m_target;
+        private TargetConfiguration m_targetConfiguration;
 
         public AddTargetForm()
         {
@@ -49,7 +51,7 @@ namespace ISCSIConsole
                 if (result == DialogResult.OK)
                 {
                     RAMDisk ramDisk = createRAMDisk.RAMDisk;
-                    AddDisk(ramDisk);
+                    AddDisk(ramDisk, null);
                 }
             }
             else
@@ -59,7 +61,7 @@ namespace ISCSIConsole
                 if (result == DialogResult.OK)
                 {
                     DiskImage diskImage = createDiskImage.DiskImage;
-                    AddDisk(diskImage);
+                    AddDisk(diskImage, DiskConfiguration.CreateDiskImage(diskImage.Path, diskImage.IsReadOnly));
                 }
             }
         }
@@ -71,7 +73,7 @@ namespace ISCSIConsole
             if (result == DialogResult.OK)
             {
                 DiskImage diskImage = selectDiskImage.DiskImage;
-                AddDisk(diskImage);
+                AddDisk(diskImage, DiskConfiguration.CreateDiskImage(diskImage.Path, diskImage.IsReadOnly));
             }
         }
 
@@ -81,7 +83,8 @@ namespace ISCSIConsole
             DialogResult result = selectPhysicalDisk.ShowDialog();
             if (result == DialogResult.OK)
             {
-                AddDisk(selectPhysicalDisk.SelectedDisk);
+                PhysicalDisk selectedDisk = selectPhysicalDisk.SelectedDisk;
+                AddDisk(selectedDisk, DiskConfiguration.CreatePhysicalDisk(selectedDisk.PhysicalDiskIndex, selectedDisk.IsReadOnly));
             }
         }
 
@@ -91,12 +94,18 @@ namespace ISCSIConsole
             DialogResult result = selectVolume.ShowDialog();
             if (result == DialogResult.OK)
             {
+                Guid? volumeGuid = selectVolume.SelectedVolumeGuid;
+                if (!volumeGuid.HasValue)
+                {
+                    MessageBox.Show("所选卷没有可保存的 Windows 卷 GUID，无法写入服务配置。", "错误");
+                    return;
+                }
                 VolumeDisk volumeDisk = new VolumeDisk(selectVolume.SelectedVolume, selectVolume.IsReadOnly);
-                AddDisk(volumeDisk);
+                AddDisk(volumeDisk, DiskConfiguration.CreateVolume(volumeGuid.Value, selectVolume.IsReadOnly));
             }
         }
 
-        private void AddDisk(Disk disk)
+        private void AddDisk(Disk disk, DiskConfiguration diskConfiguration)
         {
             string description = String.Empty;
             string sizeString = FormattingHelper.GetStandardSizeString(disk.Size);
@@ -121,6 +130,7 @@ namespace ISCSIConsole
             item.SubItems.Add(sizeString);
             listDisks.Items.Add(item);
             m_disks.Add(disk);
+            m_diskConfigurations.Add(diskConfiguration);
         }
 
         private void btnRemove_Click(object sender, EventArgs e)
@@ -130,6 +140,7 @@ namespace ISCSIConsole
                 int selectedIndex = listDisks.SelectedIndices[0];
                 LockUtils.ReleaseDisk(m_disks[selectedIndex]);
                 m_disks.RemoveAt(selectedIndex);
+                m_diskConfigurations.RemoveAt(selectedIndex);
                 listDisks.Items.RemoveAt(selectedIndex);
             }
         }
@@ -142,9 +153,25 @@ namespace ISCSIConsole
                 return;
             }
             m_target = new ISCSITarget(txtTargetIQN.Text, m_disks);
+            m_targetConfiguration = BuildTargetConfiguration(txtTargetIQN.Text);
             m_targetNumber++;
             this.DialogResult = DialogResult.OK;
             this.Close();
+        }
+
+        private TargetConfiguration BuildTargetConfiguration(string targetName)
+        {
+            TargetConfiguration configuration = new TargetConfiguration();
+            configuration.TargetName = targetName;
+            foreach (DiskConfiguration diskConfiguration in m_diskConfigurations)
+            {
+                if (diskConfiguration == null)
+                {
+                    return null;
+                }
+                configuration.Disks.Add(diskConfiguration);
+            }
+            return configuration;
         }
 
         private void btnCancel_Click(object sender, EventArgs e)
@@ -158,6 +185,14 @@ namespace ISCSIConsole
             get
             {
                 return m_target;
+            }
+        }
+
+        public TargetConfiguration TargetConfiguration
+        {
+            get
+            {
+                return m_targetConfiguration;
             }
         }
 

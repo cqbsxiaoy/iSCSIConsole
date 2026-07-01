@@ -15,6 +15,7 @@ This fork / 本分支更新
 4. 打开被占用的 VHDX 时支持只读回退，避免直接崩溃。
 5. 新增命令行启动模式，可不打开 GUI，直接用一个 VHD/VHDX 文件启动 iSCSI Target。
 6. 命令行启动时会尝试自动添加 Windows 防火墙 TCP 3260 入站规则，减少首次启动时的手动干预。
+7. GUI 可保存当前服务配置，命令行可按配置文件启动或停止服务。
 
 Command line target mode:
 =========================
@@ -55,6 +56,36 @@ Optional arguments:
 - `/readonly`: open the disk image read-only.
 - `/status <path>`: write `READY ...` or `ERROR ...` status text for scripts.
 - `/stopfile <path>`: exit when this file appears.
+
+Saved service configuration:
+============================
+The GUI can save the current target list to `iSCSIConsole.service.xml` in the program directory.
+The saved configuration includes the listen address, TCP port, target IQNs and supported disks.
+
+Supported saved disk types:
+
+- VHD / VHDX disk image path.
+- Physical disk index.
+- Windows volume GUID.
+
+Start the saved service configuration without opening the GUI:
+
+```bat
+iSCSIConsole.exe /start
+```
+
+Use a custom configuration file:
+
+```bat
+iSCSIConsole.exe /start /config D:\iSCSI\targets.xml
+```
+
+Stop a service started from the same configuration:
+
+```bat
+iSCSIConsole.exe /stop
+iSCSIConsole.exe /stop /config D:\iSCSI\targets.xml
+```
 
 About the iSCSI library:
 ========================

@@ -33,22 +33,19 @@ namespace ISCSIConsole
                 return;
             }
             DiskImage diskImage;
+            bool usedReadOnlyFallback = false;
             try
             {
-#if !NET20
-                if (path.EndsWith(".vhdx", StringComparison.InvariantCultureIgnoreCase))
-                {
-                    diskImage = new VhdxDiskImage(path, chkReadOnly.Checked);
-                }
-                else
-#endif
-                {
-                    diskImage = DiskImage.GetDiskImage(path, chkReadOnly.Checked);
-                }
+                diskImage = OpenDiskImage(path, chkReadOnly.Checked, out usedReadOnlyFallback);
             }
             catch (IOException ex)
             {
                 MessageBox.Show("无法打开磁盘镜像: " + ex.Message, "错误");
+                return;
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                MessageBox.Show("没有权限打开磁盘镜像: " + ex.Message, "错误");
                 return;
             }
             catch (InvalidDataException ex)
@@ -72,12 +69,70 @@ namespace ISCSIConsole
             }
             if (!isLocked)
             {
-                MessageBox.Show("无法以独占方式锁定磁盘镜像。", "错误");
-                return;
+                if (diskImage.IsReadOnly)
+                {
+                    DialogResult continueReadOnly = MessageBox.Show(
+                        "无法以独占方式锁定磁盘镜像。\r\n\r\n磁盘已只读打开，是否继续以只读方式添加？",
+                        "提示",
+                        MessageBoxButtons.YesNo,
+                        MessageBoxIcon.Warning);
+                    if (continueReadOnly != DialogResult.Yes)
+                    {
+                        diskImage.ReleaseLock();
+                        return;
+                    }
+                }
+                else
+                {
+                    MessageBox.Show("无法以独占方式锁定磁盘镜像。", "错误");
+                    diskImage.ReleaseLock();
+                    return;
+                }
+            }
+            if (usedReadOnlyFallback)
+            {
+                MessageBox.Show("磁盘镜像无法以读写方式打开，已自动改为只读方式。", "提示");
             }
             m_diskImage = diskImage;
             this.DialogResult = DialogResult.OK;
             this.Close();
+        }
+
+        private static DiskImage OpenDiskImage(string path, bool readOnly, out bool usedReadOnlyFallback)
+        {
+            usedReadOnlyFallback = false;
+            try
+            {
+                return OpenDiskImage(path, readOnly);
+            }
+            catch (IOException)
+            {
+                if (readOnly)
+                {
+                    throw;
+                }
+            }
+            catch (UnauthorizedAccessException)
+            {
+                if (readOnly)
+                {
+                    throw;
+                }
+            }
+
+            usedReadOnlyFallback = true;
+            return OpenDiskImage(path, true);
+        }
+
+        private static DiskImage OpenDiskImage(string path, bool readOnly)
+        {
+#if !NET20
+            if (path.EndsWith(".vhdx", StringComparison.InvariantCultureIgnoreCase))
+            {
+                return new VhdxDiskImage(path, readOnly);
+            }
+#endif
+            return DiskImage.GetDiskImage(path, readOnly);
         }
 
         private void btnBrowse_Click(object sender, EventArgs e)

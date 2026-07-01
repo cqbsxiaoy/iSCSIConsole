@@ -23,6 +23,7 @@ namespace ISCSIConsole
     {
         private ISCSIServer m_server = new ISCSIServer();
         private List<ISCSITarget> m_targets = new List<ISCSITarget>();
+        private List<TargetConfiguration> m_targetConfigurations = new List<TargetConfiguration>();
         private UsageCounter m_usageCounter = new UsageCounter();
         private bool m_started = false;
 
@@ -103,7 +104,6 @@ namespace ISCSIConsole
                 ((SCSI.VirtualSCSITarget)target.SCSITarget).OnLogEntry += Program.OnLogEntry;
                 target.OnAuthorizationRequest += new EventHandler<AuthorizationRequestArgs>(ISCSITarget_OnAuthorizationRequest);
                 target.OnSessionTermination += new EventHandler<SessionTerminationArgs>(ISCSITarget_OnSessionTermination);
-                m_targets.Add(target);
                 try
                 {
                     m_server.AddTarget(target);
@@ -111,8 +111,11 @@ namespace ISCSIConsole
                 catch (ArgumentException ex)
                 {
                     MessageBox.Show(ex.Message, "错误");
+                    LockUtils.ReleaseDisks(((SCSI.VirtualSCSITarget)target.SCSITarget).Disks);
                     return;
                 }
+                m_targets.Add(target);
+                m_targetConfigurations.Add(addTarget.TargetConfiguration);
                 listTargets.Items.Add(target.TargetName);
             }
         }
@@ -132,7 +135,49 @@ namespace ISCSIConsole
                 List<Disk> disks = ((SCSI.VirtualSCSITarget)target.SCSITarget).Disks;
                 LockUtils.ReleaseDisks(disks);
                 m_targets.RemoveAt(targetIndex);
+                m_targetConfigurations.RemoveAt(targetIndex);
                 listTargets.Items.RemoveAt(targetIndex);
+            }
+        }
+
+        private void btnSaveConfig_Click(object sender, EventArgs e)
+        {
+            int port = Conversion.ToInt32(txtPort.Text, 0);
+            if (port <= 0 || port > UInt16.MaxValue)
+            {
+                MessageBox.Show("TCP 端口无效", "错误");
+                return;
+            }
+            if (m_targets.Count == 0)
+            {
+                MessageBox.Show("请先添加至少一个 iSCSI 目标。", "错误");
+                return;
+            }
+
+            ServiceConfiguration configuration = new ServiceConfiguration();
+            configuration.ListenAddress = ((IPAddress)comboIPAddress.SelectedValue).ToString();
+            configuration.Port = port;
+
+            for (int index = 0; index < m_targetConfigurations.Count; index++)
+            {
+                TargetConfiguration targetConfiguration = m_targetConfigurations[index];
+                if (targetConfiguration == null || targetConfiguration.Disks == null || targetConfiguration.Disks.Count == 0)
+                {
+                    MessageBox.Show("目标 \"" + m_targets[index].TargetName + "\" 包含无法保存的磁盘类型。", "错误");
+                    return;
+                }
+                configuration.Targets.Add(targetConfiguration);
+            }
+
+            string path = ServiceConfiguration.GetDefaultPath();
+            try
+            {
+                configuration.Save(path);
+                MessageBox.Show("服务配置已保存:\r\n" + path, "完成");
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("保存服务配置失败: " + ex.Message, "错误");
             }
         }
 

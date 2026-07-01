@@ -14,6 +14,7 @@ namespace ISCSIConsole
     public partial class SelectVolumeForm : Form
     {
         private Volume m_selectedVolume;
+        private Guid? m_selectedVolumeGuid;
         private bool m_isReadOnly;
 
         public SelectVolumeForm()
@@ -62,6 +63,17 @@ namespace ISCSIConsole
                     MessageBox.Show("所选卷不可用", "错误");
                     return;
                 }
+
+                Guid? selectedVolumeGuid;
+                try
+                {
+                    selectedVolumeGuid = WindowsVolumeHelper.GetWindowsVolumeGuid(selectedVolume);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show(ex.Message, "错误");
+                    return;
+                }
                 if (!chkReadOnly.Checked)
                 {
                     bool skipLock;
@@ -77,23 +89,22 @@ namespace ISCSIConsole
 
                     if (!skipLock)
                     {
-                        Guid? volumeGuid = WindowsVolumeHelper.GetWindowsVolumeGuid(selectedVolume);
                         if (Environment.OSVersion.Version.Major >= 6)
                         {
                             // Windows Vista / 7 enforce various limitations on direct write operations to volumes and disks.
                             // We either have to take the disk(s) offline or use the OS volume handle for write operations.
-                            if (!volumeGuid.HasValue)
+                            if (!selectedVolumeGuid.HasValue)
                             {
                                 MessageBox.Show("操作系统无法识别所选卷");
                                 return;
                             }
-                            selectedVolume = new OperatingSystemVolume(volumeGuid.Value, selectedVolume.BytesPerSector, selectedVolume.Size, chkReadOnly.Checked);
+                            selectedVolume = new OperatingSystemVolume(selectedVolumeGuid.Value, selectedVolume.BytesPerSector, selectedVolume.Size, chkReadOnly.Checked);
                         }
 
                         bool isLocked = false;
-                        if (volumeGuid.HasValue)
+                        if (selectedVolumeGuid.HasValue)
                         {
-                            isLocked = WindowsVolumeManager.ExclusiveLock(volumeGuid.Value);
+                            isLocked = WindowsVolumeManager.ExclusiveLock(selectedVolumeGuid.Value);
                         }
                         if (!isLocked)
                         {
@@ -102,6 +113,7 @@ namespace ISCSIConsole
                         }
                     }
                 }
+                m_selectedVolumeGuid = selectedVolumeGuid;
                 m_selectedVolume = selectedVolume;
                 m_isReadOnly = chkReadOnly.Checked;
                 this.DialogResult = DialogResult.OK;
@@ -154,6 +166,14 @@ namespace ISCSIConsole
             get
             {
                 return m_selectedVolume;
+            }
+        }
+
+        public Guid? SelectedVolumeGuid
+        {
+            get
+            {
+                return m_selectedVolumeGuid;
             }
         }
 

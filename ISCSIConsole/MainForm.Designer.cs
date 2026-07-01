@@ -37,6 +37,7 @@ namespace ISCSIConsole
             this.btnAddTarget = new System.Windows.Forms.Button();
             this.lblTargets = new System.Windows.Forms.Label();
             this.btnRemoveTarget = new System.Windows.Forms.Button();
+            this.btnSaveConfig = new System.Windows.Forms.Button();
             this.listTargets = new System.Windows.Forms.ListBox();
             this.statusStrip1 = new System.Windows.Forms.StatusStrip();
             this.lblStatus = new System.Windows.Forms.ToolStripStatusLabel();
@@ -117,9 +118,19 @@ namespace ISCSIConsole
             this.btnRemoveTarget.Text = "移除目标";
             this.btnRemoveTarget.UseVisualStyleBackColor = true;
             this.btnRemoveTarget.Click += new System.EventHandler(this.btnRemoveTarget_Click);
-            // 
+            //
+            // btnSaveConfig
+            //
+            this.btnSaveConfig.Location = new System.Drawing.Point(354, 115);
+            this.btnSaveConfig.Name = "btnSaveConfig";
+            this.btnSaveConfig.Size = new System.Drawing.Size(106, 23);
+            this.btnSaveConfig.TabIndex = 9;
+            this.btnSaveConfig.Text = "保存配置";
+            this.btnSaveConfig.UseVisualStyleBackColor = true;
+            this.btnSaveConfig.Click += new System.EventHandler(this.btnSaveConfig_Click);
+            //
             // listTargets
-            // 
+            //
             this.listTargets.FormattingEnabled = true;
             this.listTargets.Location = new System.Drawing.Point(79, 57);
             this.listTargets.Name = "listTargets";
@@ -150,6 +161,7 @@ namespace ISCSIConsole
             this.ClientSize = new System.Drawing.Size(474, 195);
             this.Controls.Add(this.statusStrip1);
             this.Controls.Add(this.listTargets);
+            this.Controls.Add(this.btnSaveConfig);
             this.Controls.Add(this.btnRemoveTarget);
             this.Controls.Add(this.lblTargets);
             this.Controls.Add(this.btnAddTarget);
@@ -184,6 +196,7 @@ namespace ISCSIConsole
         private System.Windows.Forms.Button btnAddTarget;
         private System.Windows.Forms.Label lblTargets;
         private System.Windows.Forms.Button btnRemoveTarget;
+        private System.Windows.Forms.Button btnSaveConfig;
         private System.Windows.Forms.ListBox listTargets;
         private System.Windows.Forms.StatusStrip statusStrip1;
         private System.Windows.Forms.ToolStripStatusLabel lblStatus;
