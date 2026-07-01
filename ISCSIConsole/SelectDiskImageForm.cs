@@ -35,7 +35,16 @@ namespace ISCSIConsole
             DiskImage diskImage;
             try
             {
-                diskImage = DiskImage.GetDiskImage(path, chkReadOnly.Checked);
+#if !NET20
+                if (path.EndsWith(".vhdx", StringComparison.InvariantCultureIgnoreCase))
+                {
+                    diskImage = new VhdxDiskImage(path, chkReadOnly.Checked);
+                }
+                else
+#endif
+                {
+                    diskImage = DiskImage.GetDiskImage(path, chkReadOnly.Checked);
+                }
             }
             catch (IOException ex)
             {

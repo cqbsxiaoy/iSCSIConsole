@@ -41,7 +41,16 @@ namespace ISCSIConsole
                 DiskImage diskImage;
                 try
                 {
-                    diskImage = VirtualHardDisk.CreateFixedDisk(path, size);
+#if !NET20
+                    if (path.EndsWith(".vhdx", StringComparison.InvariantCultureIgnoreCase))
+                    {
+                        diskImage = VhdxDiskImage.CreateDynamicDisk(path, size);
+                    }
+                    else
+#endif
+                    {
+                        diskImage = VirtualHardDisk.CreateFixedDisk(path, size);
+                    }
                 }
                 catch (IOException ex)
                 {

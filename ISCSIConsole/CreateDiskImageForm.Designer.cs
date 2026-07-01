@@ -43,8 +43,8 @@ namespace ISCSIConsole
             // 
             // saveVirtualDiskFileDialog
             // 
-            this.saveVirtualDiskFileDialog.FileName = "Disk.vhd";
-            this.saveVirtualDiskFileDialog.Filter = "虚拟硬盘 (*.vhd)|*.vhd";
+            this.saveVirtualDiskFileDialog.FileName = "Disk.vhdx";
+            this.saveVirtualDiskFileDialog.Filter = "虚拟硬盘 (*.vhd,*.vhdx)|*.vhd;*.vhdx|VHD 文件 (*.vhd)|*.vhd|VHDX 文件 (*.vhdx)|*.vhdx";
             // 
             // numericDiskSize
             // 

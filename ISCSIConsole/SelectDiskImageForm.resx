@@ -121,7 +121,7 @@
     <value>17, 17</value>
   </metadata>
   <data name="openDiskImageDialog.Filter" xml:space="preserve">
-    <value>所有支持的磁盘镜像 (*.vhd,*.vmdk,*.img,*.bin)|*.vhd;*.vmdk;*.img;*.bin|虚拟硬盘 (*.vhd)|*.vhd|虚拟机磁盘 (*.vmdk)|*.vmdk|原始磁盘镜像 (*.img,*.bin)|*.img;*.bin|所有文件 (*.*)|*.*</value>
+    <value>所有支持的磁盘镜像 (*.vhd,*.vhdx,*.vmdk,*.img,*.bin)|*.vhd;*.vhdx;*.vmdk;*.img;*.bin|虚拟硬盘 (*.vhd,*.vhdx)|*.vhd;*.vhdx|虚拟机磁盘 (*.vmdk)|*.vmdk|原始磁盘镜像 (*.img,*.bin)|*.img;*.bin|所有文件 (*.*)|*.*</value>
   </data>
   <assembly alias="System.Drawing" name="System.Drawing, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a" />
   <data name="$this.Icon" type="System.Drawing.Icon, System.Drawing" mimetype="application/x-microsoft.net.object.bytearray.base64">
