@@ -15,6 +15,8 @@ namespace ISCSIConsole
 {
     public partial class Program
     {
+        private static bool m_headless;
+
         /// <summary>
         /// The main entry point for the application.
         /// </summary>
@@ -24,11 +26,19 @@ namespace ISCSIConsole
             Application.ThreadException += new ThreadExceptionEventHandler(Application_ThreadException);
             AppDomain.CurrentDomain.UnhandledException += new UnhandledExceptionEventHandler(CurrentDomain_UnhandledException);
 
+#if !NET20
+            if (HeadlessServer.IsServeCommand(args))
+            {
+                m_headless = true;
+                Environment.ExitCode = HeadlessServer.Run(args);
+                return;
+            }
+#endif
+
             if (args.Length > 0)
             {
                 if (args[0] == "/help")
                 {
-                    
                 }
                 if (args[0] == "/log")
                 {
@@ -75,6 +85,12 @@ namespace ISCSIConsole
         private static void HandleUnhandledException(Exception ex)
         {
             string message = String.Format("异常: {0}: {1} 来源: {2} {3}", ex.GetType(), ex.Message, ex.Source, ex.StackTrace);
+            if (m_headless)
+            {
+                Console.Error.WriteLine(message);
+                Environment.ExitCode = 1;
+                return;
+            }
             MessageBox.Show(message, "错误");
             Application.Exit();
         }
