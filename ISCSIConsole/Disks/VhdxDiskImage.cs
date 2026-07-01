@@ -11,6 +11,7 @@ namespace ISCSIConsole
         private readonly object m_syncRoot = new object();
         private DiscUtils.Vhdx.Disk m_disk;
         private SparseStream m_content;
+        private bool m_isReadOnly;
 
         public VhdxDiskImage(string diskImagePath)
             : this(diskImagePath, false)
@@ -20,8 +21,7 @@ namespace ISCSIConsole
         public VhdxDiskImage(string diskImagePath, bool isReadOnly)
             : base(diskImagePath, isReadOnly)
         {
-            FileAccess access = isReadOnly ? FileAccess.Read : FileAccess.ReadWrite;
-            m_disk = new DiscUtils.Vhdx.Disk(diskImagePath, access);
+            m_disk = OpenDisk(diskImagePath, isReadOnly, out m_isReadOnly);
             m_content = m_disk.Content;
         }
 
@@ -30,6 +30,7 @@ namespace ISCSIConsole
         {
             m_disk = disk;
             m_content = m_disk.Content;
+            m_isReadOnly = false;
         }
 
         public static VhdxDiskImage CreateDynamicDisk(string diskImagePath, long size)
@@ -84,7 +85,6 @@ namespace ISCSIConsole
             {
                 m_content.Position = sectorIndex * BytesPerSector;
                 m_content.Write(data, 0, data.Length);
-                m_content.Flush();
             }
         }
 
@@ -134,6 +134,39 @@ namespace ISCSIConsole
             get
             {
                 return m_disk.Capacity;
+            }
+        }
+
+        public override bool IsReadOnly
+        {
+            get
+            {
+                return m_isReadOnly;
+            }
+        }
+
+        private static DiscUtils.Vhdx.Disk OpenDisk(string diskImagePath, bool isReadOnly, out bool actualReadOnly)
+        {
+            if (isReadOnly)
+            {
+                actualReadOnly = true;
+                return new DiscUtils.Vhdx.Disk(diskImagePath, FileAccess.Read);
+            }
+
+            try
+            {
+                actualReadOnly = false;
+                return new DiscUtils.Vhdx.Disk(diskImagePath, FileAccess.ReadWrite);
+            }
+            catch (UnauthorizedAccessException)
+            {
+                actualReadOnly = true;
+                return new DiscUtils.Vhdx.Disk(diskImagePath, FileAccess.Read);
+            }
+            catch (IOException)
+            {
+                actualReadOnly = true;
+                return new DiscUtils.Vhdx.Disk(diskImagePath, FileAccess.Read);
             }
         }
 
