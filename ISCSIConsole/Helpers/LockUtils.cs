@@ -24,7 +24,11 @@ namespace ISCSIConsole
 
         public static void ReleaseDisk(Disk disk)
         {
-            if (disk is DiskImage)
+            if (disk is CachedDisk)
+            {
+                ReleaseDisk(((CachedDisk)disk).InnerDisk);
+            }
+            else if (disk is DiskImage)
             {
                 ((DiskImage)disk).ReleaseLock();
             }

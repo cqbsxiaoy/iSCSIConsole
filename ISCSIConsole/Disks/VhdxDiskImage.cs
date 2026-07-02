@@ -109,13 +109,31 @@ namespace ISCSIConsole
             {
                 if (m_content != null)
                 {
-                    m_content.Dispose();
-                    m_content = null;
+                    try
+                    {
+                        m_content.Dispose();
+                    }
+                    catch (NotImplementedException)
+                    {
+                    }
+                    finally
+                    {
+                        m_content = null;
+                    }
                 }
                 if (m_disk != null)
                 {
-                    m_disk.Dispose();
-                    m_disk = null;
+                    try
+                    {
+                        m_disk.Dispose();
+                    }
+                    catch (NotImplementedException)
+                    {
+                    }
+                    finally
+                    {
+                        m_disk = null;
+                    }
                 }
             }
             return true;

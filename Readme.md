@@ -16,6 +16,8 @@ This fork / 本分支更新
 5. 新增命令行启动模式，可不打开 GUI，直接用一个 VHD/VHDX 文件启动 iSCSI Target。
 6. 命令行启动时会尝试自动添加 Windows 防火墙 TCP 3260 入站规则，减少首次启动时的手动干预。
 7. GUI 可保存当前服务配置，命令行可按配置文件启动或停止服务。
+8. 后台服务支持运行中添加、移除、查看和保存 VHD/VHDX Target，无需重启服务。
+9. VHD/VHDX Target 默认启用只读块 LRU 缓存，用于加速热点读取；写入会自动使相关缓存块失效。
 
 Command line target mode:
 =========================
@@ -54,6 +56,7 @@ Optional arguments:
 - `/listen <ip>`: listen address. Use `0.0.0.0` for all interfaces. Default is all interfaces.
 - `/port <port>`: TCP port. Default is `3260`.
 - `/readonly`: open the disk image read-only.
+- `/cachemb <mb>`: read cache size for VHD / VHDX targets. Use `0` to disable the in-process read cache.
 - `/status <path>`: write `READY ...` or `ERROR ...` status text for scripts.
 - `/stopfile <path>`: exit when this file appears.
 
@@ -85,6 +88,27 @@ Stop a service started from the same configuration:
 ```bat
 iSCSIConsole.exe /stop
 iSCSIConsole.exe /stop /config D:\iSCSI\targets.xml
+```
+
+Add a VHD / VHDX target while the saved service is already running:
+
+```bat
+iSCSIConsole.exe /addtarget D:\iSCSI\001122AABBCC.vhdx pc-001122aabbcc
+```
+
+Use a custom cache size or disable the cache:
+
+```bat
+iSCSIConsole.exe /addtarget D:\iSCSI\001122AABBCC.vhdx pc-001122aabbcc /cachemb 128
+iSCSIConsole.exe /addtarget D:\iSCSI\001122AABBCC.vhdx pc-001122aabbcc /cachemb 0
+```
+
+Remove, list, or save runtime targets:
+
+```bat
+iSCSIConsole.exe /removetarget pc-001122aabbcc
+iSCSIConsole.exe /list
+iSCSIConsole.exe /save
 ```
 
 About the iSCSI library:

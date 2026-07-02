@@ -7,6 +7,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.IO;
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
@@ -48,12 +49,36 @@ namespace ISCSIConsole
             comboIPAddress.DataSource = list;
             comboIPAddress.DisplayMember = "Key";
             comboIPAddress.ValueMember = "Value";
-            lblStatus.Text = "作者: Tal Aloni (tal.aloni.il@gmail.com)";
+            lblStatus.Text = GetBrandStatusText();
 
             if (RuntimeHelper.IsWin32 && !SecurityHelper.IsAdministrator())
             {
-                lblStatus.Text = "部分功能需要管理员权限，已被禁用";
+                lblStatus.Text += " | 部分功能需要管理员权限，已被禁用";
             }
+        }
+
+        private static string GetBrandStatusText()
+        {
+            return String.Format(
+                "作者: Tal Aloni (tal.aloni.il@gmail.com) | cqbscx 汉化增强版 | 编译日期: {0}",
+                GetBuildDate().ToString("yyyy-MM-dd"));
+        }
+
+        private static DateTime GetBuildDate()
+        {
+            try
+            {
+                string location = System.Reflection.Assembly.GetExecutingAssembly().Location;
+                if (!String.IsNullOrEmpty(location) && File.Exists(location))
+                {
+                    return File.GetLastWriteTime(location);
+                }
+            }
+            catch
+            {
+            }
+
+            return DateTime.Now;
         }
 
         private void btnStart_Click(object sender, EventArgs e)
@@ -86,7 +111,7 @@ namespace ISCSIConsole
             else
             {
                 m_server.Stop();
-                lblStatus.Text = String.Empty;
+                lblStatus.Text = GetBrandStatusText();
                 m_started = false;
                 btnStart.Text = "启动";
                 txtPort.Enabled = true;
@@ -205,7 +230,7 @@ namespace ISCSIConsole
             {
                 if (m_started)
                 {
-                    lblStatus.Text = String.Format("{0} 个活动会话", m_usageCounter.SessionCount);
+                    lblStatus.Text = String.Format("{0} | {1} 个活动会话", GetBrandStatusText(), m_usageCounter.SessionCount);
                 }
 
                 if (listTargets.SelectedIndices.Count > 0)

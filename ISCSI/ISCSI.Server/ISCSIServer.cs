@@ -20,6 +20,10 @@ namespace ISCSI.Server
     public partial class ISCSIServer
     {
         public const int DefaultPort = 3260;
+        public static int ListenBacklog = 2048;
+        public static int PendingAcceptCount = 64;
+        public static int MinimumWorkerThreads = 128;
+        public static int MinimumCompletionPortThreads = 128;
 
         private Socket m_listenerSocket;
         private bool m_listening;
@@ -96,9 +100,13 @@ namespace ISCSI.Server
                 Log(Severity.Information, "Starting Server");
                 m_listenerSocket = new Socket(listenerEndPoint.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
                 m_listenerSocket.Bind(listenerEndPoint);
-                m_listenerSocket.Listen(1000);
-                m_listenerSocket.BeginAccept(ConnectRequestCallback, m_listenerSocket);
+                m_listenerSocket.Listen(ListenBacklog);
                 m_listening = true;
+                EnsureThreadPoolCapacity();
+                for (int index = 0; index < PendingAcceptCount; index++)
+                {
+                    QueueAccept(m_listenerSocket);
+                }
 
                 if (keepAliveTime.HasValue)
                 {
@@ -127,6 +135,41 @@ namespace ISCSI.Server
             }
         }
 
+        private static void EnsureThreadPoolCapacity()
+        {
+            int workerThreads;
+            int completionPortThreads;
+            ThreadPool.GetMinThreads(out workerThreads, out completionPortThreads);
+
+            workerThreads = Math.Max(workerThreads, MinimumWorkerThreads);
+            completionPortThreads = Math.Max(completionPortThreads, MinimumCompletionPortThreads);
+            ThreadPool.SetMinThreads(workerThreads, completionPortThreads);
+        }
+
+        private void QueueAccept(Socket listenerSocket)
+        {
+            if (!m_listening)
+            {
+                return;
+            }
+
+            try
+            {
+                listenerSocket.BeginAccept(ConnectRequestCallback, listenerSocket);
+            }
+            catch (ObjectDisposedException)
+            {
+            }
+            catch (SocketException ex)
+            {
+                Log(Severity.Debug, "[QueueAccept] BeginAccept SocketException: {0}", ex.Message);
+            }
+            catch (InvalidOperationException ex)
+            {
+                Log(Severity.Debug, "[QueueAccept] BeginAccept InvalidOperationException: {0}", ex.Message);
+            }
+        }
+
         // This method accepts new connections
         private void ConnectRequestCallback(IAsyncResult ar)
         {
@@ -143,10 +186,12 @@ namespace ISCSI.Server
             }
             catch (SocketException)
             {
+                QueueAccept(listenerSocket);
                 return;
             }
 
             Log(Severity.Information, "New connection has been accepted");
+            QueueAccept(listenerSocket);
 
             ConnectionState state = new ConnectionState();
             state.ConnectionParameters.InitiatorEndPoint = clientSocket.RemoteEndPoint as IPEndPoint;
@@ -173,7 +218,6 @@ namespace ISCSI.Server
             {
                 Log(Severity.Debug, "[OnConnectRequest] BeginReceive SocketException: {0}", ex.Message);
             }
-            m_listenerSocket.BeginAccept(ConnectRequestCallback, m_listenerSocket);
         }
 
         public void Stop()

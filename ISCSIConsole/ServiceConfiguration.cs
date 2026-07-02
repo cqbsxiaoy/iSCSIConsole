@@ -115,11 +115,19 @@ namespace ISCSIConsole
         public const string TypePhysicalDisk = "PhysicalDisk";
         public const string TypeVolume = "Volume";
 
+        public DiskConfiguration()
+        {
+            CacheSizeMB = CachedDisk.DefaultCacheSizeMB;
+        }
+
         [XmlAttribute]
         public string Type { get; set; }
 
         [XmlAttribute]
         public bool ReadOnly { get; set; }
+
+        [XmlAttribute]
+        public int CacheSizeMB { get; set; }
 
         public string Path { get; set; }
 
@@ -129,11 +137,17 @@ namespace ISCSIConsole
 
         public static DiskConfiguration CreateDiskImage(string path, bool readOnly)
         {
+            return CreateDiskImage(path, readOnly, CachedDisk.DefaultCacheSizeMB);
+        }
+
+        public static DiskConfiguration CreateDiskImage(string path, bool readOnly, int cacheSizeMB)
+        {
             return new DiskConfiguration()
             {
                 Type = TypeDiskImage,
                 Path = path,
-                ReadOnly = readOnly
+                ReadOnly = readOnly,
+                CacheSizeMB = cacheSizeMB
             };
         }
 
@@ -143,7 +157,8 @@ namespace ISCSIConsole
             {
                 Type = TypePhysicalDisk,
                 PhysicalDiskIndex = physicalDiskIndex,
-                ReadOnly = readOnly
+                ReadOnly = readOnly,
+                CacheSizeMB = 0
             };
         }
 
@@ -153,7 +168,8 @@ namespace ISCSIConsole
             {
                 Type = TypeVolume,
                 VolumeGuid = volumeGuid.ToString("D"),
-                ReadOnly = readOnly
+                ReadOnly = readOnly,
+                CacheSizeMB = 0
             };
         }
     }

@@ -26,6 +26,10 @@ namespace ISCSIConsole
                     IsOption(args[0], "serve") ||
                     IsOption(args[0], "start") ||
                     IsOption(args[0], "stop") ||
+                    IsOption(args[0], "addtarget") ||
+                    IsOption(args[0], "removetarget") ||
+                    IsOption(args[0], "list") ||
+                    IsOption(args[0], "save") ||
                     IsDiskImagePath(args[0]));
         }
 
@@ -48,6 +52,22 @@ namespace ISCSIConsole
             {
                 return RunConfiguredServer(options);
             }
+            if (options.Mode == ServeMode.AddTarget)
+            {
+                return SendAddTargetCommand(options);
+            }
+            if (options.Mode == ServeMode.RemoveTarget)
+            {
+                return SendRemoveTargetCommand(options);
+            }
+            if (options.Mode == ServeMode.ListTargets)
+            {
+                return SendSimpleManagementCommand(options, "LIST");
+            }
+            if (options.Mode == ServeMode.SaveConfig)
+            {
+                return SendSimpleManagementCommand(options, "SAVE");
+            }
 
             return RunSingleDiskServer(options);
         }
@@ -60,7 +80,12 @@ namespace ISCSIConsole
             {
                 DiskImage disk = OpenDiskImage(options.DiskPath, options.ReadOnly);
                 disks = new List<Disk>();
-                disks.Add(disk);
+                Disk servingDisk = disk;
+                if (options.CacheSizeMB > 0)
+                {
+                    servingDisk = new CachedDisk(disk, options.CacheSizeMB);
+                }
+                disks.Add(servingDisk);
 
                 ISCSITarget target = new ISCSITarget(options.TargetName, disks);
                 target.OnAuthorizationRequest += delegate(object sender, AuthorizationRequestArgs request)
@@ -79,12 +104,13 @@ namespace ISCSIConsole
                 server.Start(new IPEndPoint(options.ListenAddress, options.Port));
 
                 string ready = String.Format(
-                    "READY iqn={0} address={1} port={2} disk=\"{3}\" readonly={4}",
+                    "READY iqn={0} address={1} port={2} disk=\"{3}\" readonly={4} cacheMB={5}",
                     options.TargetName,
                     options.ListenAddress,
                     options.Port,
                     options.DiskPath,
-                    disk.IsReadOnly);
+                    disk.IsReadOnly,
+                    options.CacheSizeMB);
                 Console.WriteLine(ready);
                 WriteStatus(options.StatusPath, ready);
 
@@ -126,13 +152,13 @@ namespace ISCSIConsole
         private static int RunConfiguredServer(ServeOptions options)
         {
             ISCSIServer server = null;
-            List<Disk> allDisks = new List<Disk>();
+            HeadlessServiceRuntime runtime = null;
             string statePath = GetStatePath(options.ConfigPath);
             string stopFilePath = String.IsNullOrEmpty(options.StopFilePath) ? GetDefaultStopFilePath(options.ConfigPath) : options.StopFilePath;
 
             try
             {
-                ServiceConfiguration configuration = ServiceConfiguration.Load(options.ConfigPath);
+                ServiceConfiguration configuration = LoadOrCreateConfiguration(options.ConfigPath);
                 if (options.HasListenAddressOverride)
                 {
                     configuration.ListenAddress = options.ListenAddress.ToString();
@@ -151,31 +177,29 @@ namespace ISCSIConsole
                 {
                     throw new InvalidDataException("Invalid TCP port in configuration: " + configuration.Port);
                 }
-                if (configuration.Targets.Count == 0)
-                {
-                    throw new InvalidDataException("The service configuration does not contain any target.");
-                }
 
                 server = new ISCSIServer();
                 server.OnLogEntry += Server_OnLogEntry;
+                runtime = new HeadlessServiceRuntime(server, configuration, options.ConfigPath);
 
                 foreach (TargetConfiguration targetConfiguration in configuration.Targets)
                 {
-                    ISCSITarget target = CreateTarget(targetConfiguration, allDisks);
-                    server.AddTarget(target);
+                    runtime.AddInitialTarget(targetConfiguration);
                 }
 
                 DeleteFileIfExists(stopFilePath);
                 EnsureFirewallRule(configuration.Port);
                 server.Start(new IPEndPoint(listenAddress, configuration.Port));
-                WriteState(statePath, stopFilePath);
+                runtime.StartManagementPipe();
+                WriteState(statePath, stopFilePath, runtime.PipeName);
 
                 string ready = String.Format(
-                    "READY config=\"{0}\" targets={1} address={2} port={3}",
+                    "READY config=\"{0}\" targets={1} address={2} port={3} pipe={4}",
                     options.ConfigPath,
-                    configuration.Targets.Count,
+                    runtime.TargetCount,
                     listenAddress,
-                    configuration.Port);
+                    configuration.Port,
+                    runtime.PipeName);
                 Console.WriteLine(ready);
                 WriteStatus(options.StatusPath, ready);
 
@@ -191,7 +215,13 @@ namespace ISCSIConsole
             {
                 DeleteFileIfExists(statePath);
                 DeleteFileIfExists(stopFilePath);
-                StopAndRelease(server, allDisks);
+                if (runtime != null)
+                {
+                    StopAndRelease(server, null);
+                    server = null;
+                    runtime.Stop();
+                }
+                StopAndRelease(server, null);
             }
         }
 
@@ -223,7 +253,7 @@ namespace ISCSIConsole
             }
         }
 
-        private static ISCSITarget CreateTarget(TargetConfiguration targetConfiguration, List<Disk> allDisks)
+        public static ISCSITarget CreateTarget(TargetConfiguration targetConfiguration, List<Disk> allDisks)
         {
             if (targetConfiguration == null || String.IsNullOrEmpty(targetConfiguration.TargetName))
             {
@@ -239,23 +269,34 @@ namespace ISCSIConsole
             }
 
             List<Disk> disks = new List<Disk>();
-            foreach (DiskConfiguration diskConfiguration in targetConfiguration.Disks)
+            try
             {
-                Disk disk = OpenConfiguredDisk(diskConfiguration);
-                disks.Add(disk);
-                allDisks.Add(disk);
-            }
+                foreach (DiskConfiguration diskConfiguration in targetConfiguration.Disks)
+                {
+                    Disk disk = OpenConfiguredDisk(diskConfiguration);
+                    disks.Add(disk);
+                }
 
-            ISCSITarget target = new ISCSITarget(targetConfiguration.TargetName, disks);
-            target.OnAuthorizationRequest += delegate(object sender, AuthorizationRequestArgs request)
+                ISCSITarget target = new ISCSITarget(targetConfiguration.TargetName, disks);
+                target.OnAuthorizationRequest += delegate(object sender, AuthorizationRequestArgs request)
+                {
+                    request.Accept = true;
+                };
+                target.OnSessionTermination += delegate(object sender, SessionTerminationArgs request)
+                {
+                    Console.WriteLine("SESSION_TERMINATED target={0} initiator={1}", targetConfiguration.TargetName, request.InitiatorName);
+                };
+                if (allDisks != null)
+                {
+                    allDisks.AddRange(disks);
+                }
+                return target;
+            }
+            catch
             {
-                request.Accept = true;
-            };
-            target.OnSessionTermination += delegate(object sender, SessionTerminationArgs request)
-            {
-                Console.WriteLine("SESSION_TERMINATED target={0} initiator={1}", targetConfiguration.TargetName, request.InitiatorName);
-            };
-            return target;
+                LockUtils.ReleaseDisks(disks);
+                throw;
+            }
         }
 
         private static Disk OpenConfiguredDisk(DiskConfiguration diskConfiguration)
@@ -276,7 +317,12 @@ namespace ISCSIConsole
                 {
                     throw new FileNotFoundException("Disk image was not found.", path);
                 }
-                return OpenDiskImage(path, diskConfiguration.ReadOnly);
+                DiskImage diskImage = OpenDiskImage(path, diskConfiguration.ReadOnly);
+                if (diskConfiguration.CacheSizeMB > 0)
+                {
+                    return new CachedDisk(diskImage, diskConfiguration.CacheSizeMB);
+                }
+                return diskImage;
             }
 
             if (diskConfiguration.Type.Equals(DiskConfiguration.TypePhysicalDisk, StringComparison.InvariantCultureIgnoreCase))
@@ -290,6 +336,75 @@ namespace ISCSIConsole
             }
 
             throw new InvalidDataException("Unsupported disk type in service configuration: " + diskConfiguration.Type);
+        }
+
+        private static int SendAddTargetCommand(ServeOptions options)
+        {
+            if (String.IsNullOrEmpty(options.DiskPath))
+            {
+                WriteError(options, "Missing disk image path.");
+                return 2;
+            }
+            if (String.IsNullOrEmpty(options.TargetName))
+            {
+                options.TargetName = BuildTargetName(Path.GetFileNameWithoutExtension(options.DiskPath));
+            }
+
+            try
+            {
+                string pipeName = ReadStatePipeName(GetStatePath(options.ConfigPath));
+                string command = HeadlessServiceRuntime.BuildAddCommand(options.TargetName, options.DiskPath, options.ReadOnly, options.CacheSizeMB, !options.NoSave);
+                string response = HeadlessServiceRuntime.SendManagementCommand(pipeName, command);
+                Console.WriteLine(response);
+                WriteStatus(options.StatusPath, response);
+                return response.StartsWith("OK", StringComparison.InvariantCultureIgnoreCase) ? 0 : 1;
+            }
+            catch (Exception ex)
+            {
+                WriteError(options, ex.GetType().Name + ": " + ex.Message);
+                return 1;
+            }
+        }
+
+        private static int SendRemoveTargetCommand(ServeOptions options)
+        {
+            if (String.IsNullOrEmpty(options.TargetName))
+            {
+                WriteError(options, "Missing target name.");
+                return 2;
+            }
+
+            try
+            {
+                string pipeName = ReadStatePipeName(GetStatePath(options.ConfigPath));
+                string command = HeadlessServiceRuntime.BuildRemoveCommand(options.TargetName, !options.NoSave);
+                string response = HeadlessServiceRuntime.SendManagementCommand(pipeName, command);
+                Console.WriteLine(response);
+                WriteStatus(options.StatusPath, response);
+                return response.StartsWith("OK", StringComparison.InvariantCultureIgnoreCase) ? 0 : 1;
+            }
+            catch (Exception ex)
+            {
+                WriteError(options, ex.GetType().Name + ": " + ex.Message);
+                return 1;
+            }
+        }
+
+        private static int SendSimpleManagementCommand(ServeOptions options, string command)
+        {
+            try
+            {
+                string pipeName = ReadStatePipeName(GetStatePath(options.ConfigPath));
+                string response = HeadlessServiceRuntime.SendManagementCommand(pipeName, command);
+                Console.WriteLine(response);
+                WriteStatus(options.StatusPath, response);
+                return response.StartsWith("OK", StringComparison.InvariantCultureIgnoreCase) ? 0 : 1;
+            }
+            catch (Exception ex)
+            {
+                WriteError(options, ex.GetType().Name + ": " + ex.Message);
+                return 1;
+            }
         }
 
         private static PhysicalDisk OpenPhysicalDisk(int physicalDiskIndex, bool readOnly)
@@ -438,6 +553,7 @@ namespace ISCSIConsole
             options.Port = DefaultPort;
             options.ListenAddress = IPAddress.Any;
             options.ConfigPath = ServiceConfiguration.GetDefaultPath();
+            options.CacheSizeMB = CachedDisk.DefaultCacheSizeMB;
 
             if (args == null || args.Length == 0)
             {
@@ -453,6 +569,26 @@ namespace ISCSIConsole
             if (IsOption(args[0], "stop"))
             {
                 options.Mode = ServeMode.StopConfig;
+                return TryParseConfigOptions(args, 1, options, out error);
+            }
+            if (IsOption(args[0], "addtarget"))
+            {
+                options.Mode = ServeMode.AddTarget;
+                return TryParseAddTargetOptions(args, 1, options, out error);
+            }
+            if (IsOption(args[0], "removetarget"))
+            {
+                options.Mode = ServeMode.RemoveTarget;
+                return TryParseRemoveTargetOptions(args, 1, options, out error);
+            }
+            if (IsOption(args[0], "list"))
+            {
+                options.Mode = ServeMode.ListTargets;
+                return TryParseConfigOptions(args, 1, options, out error);
+            }
+            if (IsOption(args[0], "save"))
+            {
+                options.Mode = ServeMode.SaveConfig;
                 return TryParseConfigOptions(args, 1, options, out error);
             }
 
@@ -536,6 +672,22 @@ namespace ISCSIConsole
                 else if (IsOption(key, "readonly"))
                 {
                     options.ReadOnly = true;
+                }
+                else if (IsOption(key, "cachemb"))
+                {
+                    string value;
+                    if (!TryReadValue(args, ref index, out value, out error))
+                    {
+                        return false;
+                    }
+
+                    int cacheSizeMB;
+                    if (!Int32.TryParse(value, out cacheSizeMB) || cacheSizeMB < 0)
+                    {
+                        error = "Invalid cache size: " + value;
+                        return false;
+                    }
+                    options.CacheSizeMB = cacheSizeMB;
                 }
                 else if (IsOption(key, "status"))
                 {
@@ -670,12 +822,168 @@ namespace ISCSIConsole
             }
 
             options.ConfigPath = Path.GetFullPath(options.ConfigPath);
-            if (options.Mode == ServeMode.StartConfig && !File.Exists(options.ConfigPath))
+
+            return true;
+        }
+
+        private static bool TryParseAddTargetOptions(string[] args, int index, ServeOptions options, out string error)
+        {
+            error = null;
+            options.CacheSizeMB = CachedDisk.DefaultCacheSizeMB;
+
+            if (index < args.Length && !IsOption(args[index]))
             {
-                error = "Service configuration was not found: " + options.ConfigPath;
+                options.DiskPath = args[index];
+                index++;
+            }
+            if (index < args.Length && !IsOption(args[index]))
+            {
+                options.TargetName = BuildTargetName(args[index]);
+                index++;
+            }
+
+            for (; index < args.Length; index++)
+            {
+                string key = args[index];
+                if (IsOption(key, "config"))
+                {
+                    if (!TryReadValue(args, ref index, out options.ConfigPath, out error))
+                    {
+                        return false;
+                    }
+                }
+                else if (IsOption(key, "disk"))
+                {
+                    if (!TryReadValue(args, ref index, out options.DiskPath, out error))
+                    {
+                        return false;
+                    }
+                }
+                else if (IsOption(key, "target") || IsOption(key, "iqn"))
+                {
+                    if (!TryReadValue(args, ref index, out options.TargetName, out error))
+                    {
+                        return false;
+                    }
+                    options.TargetName = BuildTargetName(options.TargetName);
+                }
+                else if (IsOption(key, "readonly"))
+                {
+                    options.ReadOnly = true;
+                }
+                else if (IsOption(key, "cachemb"))
+                {
+                    string value;
+                    if (!TryReadValue(args, ref index, out value, out error))
+                    {
+                        return false;
+                    }
+                    int cacheSizeMB;
+                    if (!Int32.TryParse(value, out cacheSizeMB) || cacheSizeMB < 0)
+                    {
+                        error = "Invalid cache size: " + value;
+                        return false;
+                    }
+                    options.CacheSizeMB = cacheSizeMB;
+                }
+                else if (IsOption(key, "nosave"))
+                {
+                    options.NoSave = true;
+                }
+                else if (IsOption(key, "status"))
+                {
+                    if (!TryReadValue(args, ref index, out options.StatusPath, out error))
+                    {
+                        return false;
+                    }
+                }
+                else if (IsOption(key, "help") || IsOption(key, "?"))
+                {
+                    error = GetUsage();
+                    return false;
+                }
+                else
+                {
+                    error = "Unknown argument: " + key;
+                    return false;
+                }
+            }
+
+            if (String.IsNullOrEmpty(options.DiskPath))
+            {
+                error = "Missing disk image path.";
                 return false;
             }
 
+            options.ConfigPath = Path.GetFullPath(options.ConfigPath);
+            options.DiskPath = Path.GetFullPath(options.DiskPath);
+            if (!File.Exists(options.DiskPath))
+            {
+                error = "Disk image was not found: " + options.DiskPath;
+                return false;
+            }
+            if (!options.DiskPath.EndsWith(".vhd", StringComparison.InvariantCultureIgnoreCase) &&
+                !options.DiskPath.EndsWith(".vhdx", StringComparison.InvariantCultureIgnoreCase))
+            {
+                error = "Only VHD and VHDX disk images are supported by /addtarget.";
+                return false;
+            }
+
+            return true;
+        }
+
+        private static bool TryParseRemoveTargetOptions(string[] args, int index, ServeOptions options, out string error)
+        {
+            error = null;
+
+            if (index < args.Length && !IsOption(args[index]))
+            {
+                options.TargetName = BuildTargetName(args[index]);
+                index++;
+            }
+
+            for (; index < args.Length; index++)
+            {
+                string key = args[index];
+                if (IsOption(key, "config"))
+                {
+                    if (!TryReadValue(args, ref index, out options.ConfigPath, out error))
+                    {
+                        return false;
+                    }
+                }
+                else if (IsOption(key, "target") || IsOption(key, "iqn"))
+                {
+                    if (!TryReadValue(args, ref index, out options.TargetName, out error))
+                    {
+                        return false;
+                    }
+                    options.TargetName = BuildTargetName(options.TargetName);
+                }
+                else if (IsOption(key, "nosave"))
+                {
+                    options.NoSave = true;
+                }
+                else if (IsOption(key, "status"))
+                {
+                    if (!TryReadValue(args, ref index, out options.StatusPath, out error))
+                    {
+                        return false;
+                    }
+                }
+                else if (IsOption(key, "help") || IsOption(key, "?"))
+                {
+                    error = GetUsage();
+                    return false;
+                }
+                else
+                {
+                    error = "Unknown argument: " + key;
+                    return false;
+                }
+            }
+
+            options.ConfigPath = Path.GetFullPath(options.ConfigPath);
             return true;
         }
 
@@ -716,7 +1024,19 @@ namespace ISCSIConsole
             return Path.GetFullPath(configPath) + ".stop";
         }
 
-        private static void WriteState(string statePath, string stopFilePath)
+        private static ServiceConfiguration LoadOrCreateConfiguration(string configPath)
+        {
+            if (File.Exists(configPath))
+            {
+                return ServiceConfiguration.Load(configPath);
+            }
+
+            ServiceConfiguration configuration = new ServiceConfiguration();
+            configuration.Save(configPath);
+            return configuration;
+        }
+
+        private static void WriteState(string statePath, string stopFilePath, string pipeName)
         {
             string directory = Path.GetDirectoryName(Path.GetFullPath(statePath));
             if (!String.IsNullOrEmpty(directory) && !Directory.Exists(directory))
@@ -727,7 +1047,8 @@ namespace ISCSIConsole
             string[] lines = new string[]
             {
                 "pid=" + Process.GetCurrentProcess().Id,
-                "stopfile=" + stopFilePath
+                "stopfile=" + stopFilePath,
+                "pipe=" + pipeName
             };
             File.WriteAllLines(statePath, lines);
         }
@@ -743,6 +1064,28 @@ namespace ISCSIConsole
                 }
             }
             return null;
+        }
+
+        private static string ReadStatePipeName(string statePath)
+        {
+            if (!File.Exists(statePath))
+            {
+                throw new FileNotFoundException("No running service state was found.", statePath);
+            }
+
+            string[] lines = File.ReadAllLines(statePath);
+            foreach (string line in lines)
+            {
+                if (line.StartsWith("pipe=", StringComparison.InvariantCultureIgnoreCase))
+                {
+                    string pipeName = line.Substring("pipe=".Length).Trim();
+                    if (!String.IsNullOrEmpty(pipeName))
+                    {
+                        return pipeName;
+                    }
+                }
+            }
+            throw new InvalidDataException("The running service state does not contain a management pipe name.");
         }
 
         private static void DeleteFileIfExists(string path)
@@ -784,7 +1127,7 @@ namespace ISCSIConsole
                     value.EndsWith(".vhdx", StringComparison.InvariantCultureIgnoreCase));
         }
 
-        private static string BuildTargetName(string value)
+        public static string BuildTargetName(string value)
         {
             value = (value ?? String.Empty).Trim();
             if (value.StartsWith("iqn.", StringComparison.InvariantCultureIgnoreCase))
@@ -891,14 +1234,22 @@ namespace ISCSIConsole
             return "Usage:\r\n" +
                    "  ISCSIConsole.exe <path.vhdx> [target-name] [/listen 0.0.0.0] [/port 3260] [/readonly] [/status <path>] [/stopfile <path>]\r\n" +
                    "  ISCSIConsole.exe /start [/config <path>] [/listen <ip>] [/port <port>] [/status <path>]\r\n" +
-                   "  ISCSIConsole.exe /stop [/config <path>]";
+                   "  ISCSIConsole.exe /stop [/config <path>]\r\n" +
+                   "  ISCSIConsole.exe /addtarget <path.vhdx> [target-name] [/config <path>] [/readonly] [/cachemb <mb>] [/nosave]\r\n" +
+                   "  ISCSIConsole.exe /removetarget <target-name> [/config <path>] [/nosave]\r\n" +
+                   "  ISCSIConsole.exe /list [/config <path>]\r\n" +
+                   "  ISCSIConsole.exe /save [/config <path>]";
         }
 
         private enum ServeMode
         {
             SingleDisk,
             StartConfig,
-            StopConfig
+            StopConfig,
+            AddTarget,
+            RemoveTarget,
+            ListTargets,
+            SaveConfig
         }
 
         private class ServeOptions
@@ -911,6 +1262,8 @@ namespace ISCSIConsole
             public bool HasListenAddressOverride;
             public bool HasPortOverride;
             public bool ReadOnly;
+            public int CacheSizeMB;
+            public bool NoSave;
             public string ConfigPath;
             public string StatusPath;
             public string StopFilePath;

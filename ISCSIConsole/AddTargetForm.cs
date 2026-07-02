@@ -147,6 +147,11 @@ namespace ISCSIConsole
 
         private void btnOK_Click(object sender, EventArgs e)
         {
+            if (m_disks.Count == 0)
+            {
+                MessageBox.Show("请先添加至少一个磁盘。", "错误");
+                return;
+            }
             if (!ISCSINameHelper.IsValidIQN(txtTargetIQN.Text))
             {
                 MessageBox.Show("目标 IQN 无效", "错误");
