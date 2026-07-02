@@ -43,9 +43,9 @@ namespace ISCSIConsole
 
         public override byte[] ReadSectors(long sectorIndex, int sectorCount)
         {
-            CheckBoundaries(sectorIndex, sectorCount);
+            int byteCount = CheckDiskBoundaries(sectorIndex, sectorCount);
 
-            byte[] result = new byte[sectorCount * BytesPerSector];
+            byte[] result = new byte[byteCount];
             int resultOffset = 0;
             long currentSector = sectorIndex;
             int remainingSectors = sectorCount;
@@ -92,7 +92,7 @@ namespace ISCSIConsole
             }
 
             int sectorCount = data.Length / BytesPerSector;
-            CheckBoundaries(sectorIndex, sectorCount);
+            CheckDiskBoundaries(sectorIndex, sectorCount);
 
             lock (m_lock)
             {
@@ -161,6 +161,31 @@ namespace ISCSIConsole
             return entry;
         }
 
+        private int CheckDiskBoundaries(long sectorIndex, int sectorCount)
+        {
+            if (sectorIndex < 0)
+            {
+                throw new ArgumentOutOfRangeException("sectorIndex");
+            }
+            if (sectorCount < 0)
+            {
+                throw new ArgumentOutOfRangeException("sectorCount");
+            }
+
+            long byteOffset = checked(sectorIndex * (long)BytesPerSector);
+            long byteCount = checked(sectorCount * (long)BytesPerSector);
+            if (byteOffset + byteCount < byteOffset || byteOffset + byteCount > Size)
+            {
+                throw new ArgumentOutOfRangeException("sectorCount", "The requested sectors are outside the disk.");
+            }
+            if (byteCount > Int32.MaxValue)
+            {
+                throw new ArgumentOutOfRangeException("sectorCount", "The requested sector count is too large.");
+            }
+
+            return (int)byteCount;
+        }
+
         private void Touch(CacheEntry entry)
         {
             m_lru.Remove(entry.Node);
@@ -169,6 +194,11 @@ namespace ISCSIConsole
 
         private void InvalidateRange(long sectorIndex, int sectorCount)
         {
+            if (sectorCount <= 0)
+            {
+                return;
+            }
+
             long firstBlock = sectorIndex / m_blockSectorCount;
             long lastBlock = (sectorIndex + sectorCount - 1) / m_blockSectorCount;
             for (long blockIndex = firstBlock; blockIndex <= lastBlock; blockIndex++)
