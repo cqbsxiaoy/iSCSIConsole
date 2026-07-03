@@ -29,6 +29,10 @@ namespace SCSI
             uint temp = BigEndianReader.ReadUInt24(buffer, offset + 1);
             LogicalBlockAddress = temp & 0x1FFFFF;
             TransferLength = buffer[offset + 4];
+            if ((OpCode == SCSIOpCodeName.Read6 || OpCode == SCSIOpCodeName.Write6) && TransferLength == 0)
+            {
+                TransferLength = 256;
+            }
             Control = buffer[offset + 5];
         }
 
@@ -40,7 +44,14 @@ namespace SCSI
             buffer[1] |= (byte)((LogicalBlockAddress >> 16) & 0x1F);
             buffer[2] = (byte)((LogicalBlockAddress >> 8) & 0xFF);
             buffer[3] = (byte)((LogicalBlockAddress >> 0) & 0xFF);
-            buffer[4] = (byte)TransferLength;
+            if ((OpCode == SCSIOpCodeName.Read6 || OpCode == SCSIOpCodeName.Write6) && TransferLength == 256)
+            {
+                buffer[4] = 0;
+            }
+            else
+            {
+                buffer[4] = (byte)TransferLength;
+            }
             buffer[5] = Control;
             return buffer;
         }

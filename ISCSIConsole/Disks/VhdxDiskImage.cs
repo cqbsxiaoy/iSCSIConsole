@@ -195,7 +195,8 @@ namespace ISCSIConsole
                 int bytesRead = stream.Read(buffer, offset, count);
                 if (bytesRead == 0)
                 {
-                    throw new EndOfStreamException();
+                    Array.Clear(buffer, offset, count);
+                    return;
                 }
 
                 offset += bytesRead;

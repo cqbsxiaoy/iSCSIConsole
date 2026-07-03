@@ -18,6 +18,7 @@ This fork / 本分支更新
 7. GUI 可保存当前服务配置，命令行可按配置文件启动或停止服务。
 8. 后台服务支持运行中添加、移除、查看和保存 VHD/VHDX Target，无需重启服务。
 9. 命令行和后台服务默认直接访问磁盘镜像，避免额外读缓存影响客户端挂载兼容性。
+10. 修正 READ(6) / WRITE(6) 长度为 0 时应表示 256 个块的兼容性问题。
 
 Command line target mode:
 =========================
@@ -88,6 +89,8 @@ Stop a service started from the same configuration:
 iSCSIConsole.exe /stop
 iSCSIConsole.exe /stop /config D:\iSCSI\targets.xml
 ```
+
+`/stop` can also stop a single-disk service started by passing a VHD / VHDX path directly.
 
 Add a VHD / VHDX target while the saved service is already running:
 

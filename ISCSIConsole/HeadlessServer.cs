@@ -76,6 +76,9 @@ namespace ISCSIConsole
         {
             ISCSIServer server = null;
             List<Disk> disks = null;
+            HeadlessServiceRuntime runtime = null;
+            string statePath = GetStatePath(options.ConfigPath);
+            string stopFilePath = String.IsNullOrEmpty(options.StopFilePath) ? GetDefaultStopFilePath(options.ConfigPath) : options.StopFilePath;
             try
             {
                 DiskImage disk = OpenDiskImage(options.DiskPath, options.ReadOnly);
@@ -95,40 +98,26 @@ namespace ISCSIConsole
                 server = new ISCSIServer();
                 server.OnLogEntry += Server_OnLogEntry;
                 server.AddTarget(target);
+                runtime = new HeadlessServiceRuntime(server, new ServiceConfiguration(), options.ConfigPath);
                 EnsureFirewallRule(options.Port);
                 server.Start(new IPEndPoint(options.ListenAddress, options.Port));
+                runtime.StartManagementPipe();
+                WriteState(statePath, stopFilePath, runtime.PipeName);
 
                 string ready = String.Format(
-                    "READY iqn={0} address={1} port={2} disk=\"{3}\" readonly={4}",
+                    "READY iqn={0} address={1} port={2} disk=\"{3}\" readonly={4} size={5} bytesPerSector={6} pipe={7}",
                     options.TargetName,
                     options.ListenAddress,
                     options.Port,
                     options.DiskPath,
-                    disk.IsReadOnly);
+                    disk.IsReadOnly,
+                    disk.Size,
+                    disk.BytesPerSector,
+                    runtime.PipeName);
                 Console.WriteLine(ready);
                 WriteStatus(options.StatusPath, ready);
 
-                using (ManualResetEvent stopEvent = new ManualResetEvent(false))
-                {
-                    Console.CancelKeyPress += delegate(object sender, ConsoleCancelEventArgs eventArgs)
-                    {
-                        eventArgs.Cancel = true;
-                        stopEvent.Set();
-                    };
-
-                    while (true)
-                    {
-                        if (stopEvent.WaitOne(1000))
-                        {
-                            break;
-                        }
-
-                        if (!String.IsNullOrEmpty(options.StopFilePath) && File.Exists(options.StopFilePath))
-                        {
-                            break;
-                        }
-                    }
-                }
+                WaitForStopSignal(stopFilePath, runtime);
 
                 return 0;
             }
@@ -139,6 +128,12 @@ namespace ISCSIConsole
             }
             finally
             {
+                DeleteFileIfExists(statePath);
+                DeleteFileIfExists(stopFilePath);
+                if (runtime != null)
+                {
+                    runtime.Stop();
+                }
                 StopAndRelease(server, disks);
             }
         }
