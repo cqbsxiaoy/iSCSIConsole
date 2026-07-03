@@ -7,7 +7,7 @@ namespace ISCSIConsole
 {
     public class CachedDisk : Disk
     {
-        public const int DefaultCacheSizeMB = 32;
+        public const int DefaultCacheSizeMB = 0;
         public const int DefaultBlockSizeKB = 64;
 
         private class CacheEntry

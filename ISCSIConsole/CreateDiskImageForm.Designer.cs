@@ -64,7 +64,7 @@ namespace ISCSIConsole
             this.numericDiskSize.TabIndex = 4;
             this.numericDiskSize.ThousandsSeparator = true;
             this.numericDiskSize.Value = new decimal(new int[] {
-            100,
+            1024,
             0,
             0,
             0});

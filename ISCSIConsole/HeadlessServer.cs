@@ -80,12 +80,7 @@ namespace ISCSIConsole
             {
                 DiskImage disk = OpenDiskImage(options.DiskPath, options.ReadOnly);
                 disks = new List<Disk>();
-                Disk servingDisk = disk;
-                if (options.CacheSizeMB > 0)
-                {
-                    servingDisk = new CachedDisk(disk, options.CacheSizeMB);
-                }
-                disks.Add(servingDisk);
+                disks.Add(disk);
 
                 ISCSITarget target = new ISCSITarget(options.TargetName, disks);
                 target.OnAuthorizationRequest += delegate(object sender, AuthorizationRequestArgs request)
@@ -104,13 +99,12 @@ namespace ISCSIConsole
                 server.Start(new IPEndPoint(options.ListenAddress, options.Port));
 
                 string ready = String.Format(
-                    "READY iqn={0} address={1} port={2} disk=\"{3}\" readonly={4} cacheMB={5}",
+                    "READY iqn={0} address={1} port={2} disk=\"{3}\" readonly={4}",
                     options.TargetName,
                     options.ListenAddress,
                     options.Port,
                     options.DiskPath,
-                    disk.IsReadOnly,
-                    options.CacheSizeMB);
+                    disk.IsReadOnly);
                 Console.WriteLine(ready);
                 WriteStatus(options.StatusPath, ready);
 
@@ -203,7 +197,7 @@ namespace ISCSIConsole
                 Console.WriteLine(ready);
                 WriteStatus(options.StatusPath, ready);
 
-                WaitForStopFile(stopFilePath);
+                WaitForStopSignal(stopFilePath, runtime);
                 return 0;
             }
             catch (Exception ex)
@@ -236,15 +230,40 @@ namespace ISCSIConsole
                     return 1;
                 }
 
+                int processId = ReadStateProcessId(statePath);
                 string stopFilePath = ReadStateStopFilePath(statePath);
                 if (String.IsNullOrEmpty(stopFilePath))
                 {
                     stopFilePath = GetDefaultStopFilePath(options.ConfigPath);
                 }
 
+                bool pipeStopRequested = false;
+                try
+                {
+                    string pipeName = ReadStatePipeName(statePath);
+                    string response = HeadlessServiceRuntime.SendManagementCommand(pipeName, "STOP");
+                    Console.WriteLine(response);
+                    pipeStopRequested = response.StartsWith("OK", StringComparison.InvariantCultureIgnoreCase);
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine("WARNING: Failed to send management stop command: " + ex.Message);
+                }
+
                 WriteStatus(stopFilePath, "stop");
-                Console.WriteLine("STOP_REQUESTED stopfile=\"{0}\"", stopFilePath);
-                return 0;
+                if (!pipeStopRequested)
+                {
+                    Console.WriteLine("STOP_REQUESTED stopfile=\"{0}\"", stopFilePath);
+                }
+
+                if (WaitForServiceStop(statePath, processId, 30000))
+                {
+                    Console.WriteLine("STOPPED");
+                    return 0;
+                }
+
+                Console.Error.WriteLine("ERROR: The running service did not exit within the timeout.");
+                return 1;
             }
             catch (Exception ex)
             {
@@ -318,10 +337,6 @@ namespace ISCSIConsole
                     throw new FileNotFoundException("Disk image was not found.", path);
                 }
                 DiskImage diskImage = OpenDiskImage(path, diskConfiguration.ReadOnly);
-                if (diskConfiguration.CacheSizeMB > 0)
-                {
-                    return new CachedDisk(diskImage, diskConfiguration.CacheSizeMB);
-                }
                 return diskImage;
             }
 
@@ -509,7 +524,7 @@ namespace ISCSIConsole
             }
         }
 
-        private static void WaitForStopFile(string stopFilePath)
+        private static void WaitForStopSignal(string stopFilePath, HeadlessServiceRuntime runtime)
         {
             using (ManualResetEvent stopEvent = new ManualResetEvent(false))
             {
@@ -521,7 +536,12 @@ namespace ISCSIConsole
 
                 while (true)
                 {
-                    if (stopEvent.WaitOne(1000))
+                    if (stopEvent.WaitOne(200))
+                    {
+                        break;
+                    }
+
+                    if (runtime != null && runtime.StopRequested)
                     {
                         break;
                     }
@@ -532,6 +552,57 @@ namespace ISCSIConsole
                     }
                 }
             }
+        }
+
+        private static bool WaitForServiceStop(string statePath, int processId, int timeoutMilliseconds)
+        {
+            Stopwatch stopwatch = Stopwatch.StartNew();
+            while (stopwatch.ElapsedMilliseconds < timeoutMilliseconds)
+            {
+                if (processId > 0)
+                {
+                    try
+                    {
+                        Process process = Process.GetProcessById(processId);
+                        if (process.HasExited)
+                        {
+                            return true;
+                        }
+                    }
+                    catch (ArgumentException)
+                    {
+                        return true;
+                    }
+                    catch
+                    {
+                    }
+                }
+                else if (!File.Exists(statePath))
+                {
+                    return true;
+                }
+
+                Thread.Sleep(200);
+            }
+
+            if (processId > 0)
+            {
+                try
+                {
+                    Process process = Process.GetProcessById(processId);
+                    return process.HasExited;
+                }
+                catch (ArgumentException)
+                {
+                    return true;
+                }
+                catch
+                {
+                    return false;
+                }
+            }
+
+            return !File.Exists(statePath);
         }
 
         private static DiskImage OpenDiskImage(string diskPath, bool readOnly)
@@ -1066,6 +1137,23 @@ namespace ISCSIConsole
             return null;
         }
 
+        private static int ReadStateProcessId(string statePath)
+        {
+            string[] lines = File.ReadAllLines(statePath);
+            foreach (string line in lines)
+            {
+                if (line.StartsWith("pid=", StringComparison.InvariantCultureIgnoreCase))
+                {
+                    int processId;
+                    if (Int32.TryParse(line.Substring("pid=".Length).Trim(), out processId))
+                    {
+                        return processId;
+                    }
+                }
+            }
+            return 0;
+        }
+
         private static string ReadStatePipeName(string statePath)
         {
             if (!File.Exists(statePath))
@@ -1235,7 +1323,7 @@ namespace ISCSIConsole
                    "  ISCSIConsole.exe <path.vhdx> [target-name] [/listen 0.0.0.0] [/port 3260] [/readonly] [/status <path>] [/stopfile <path>]\r\n" +
                    "  ISCSIConsole.exe /start [/config <path>] [/listen <ip>] [/port <port>] [/status <path>]\r\n" +
                    "  ISCSIConsole.exe /stop [/config <path>]\r\n" +
-                   "  ISCSIConsole.exe /addtarget <path.vhdx> [target-name] [/config <path>] [/readonly] [/cachemb <mb>] [/nosave]\r\n" +
+                   "  ISCSIConsole.exe /addtarget <path.vhdx> [target-name] [/config <path>] [/readonly] [/nosave]\r\n" +
                    "  ISCSIConsole.exe /removetarget <target-name> [/config <path>] [/nosave]\r\n" +
                    "  ISCSIConsole.exe /list [/config <path>]\r\n" +
                    "  ISCSIConsole.exe /save [/config <path>]";

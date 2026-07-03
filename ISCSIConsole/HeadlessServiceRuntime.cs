@@ -27,6 +27,7 @@ namespace ISCSIConsole
         private readonly Dictionary<string, RuntimeTarget> m_targets = new Dictionary<string, RuntimeTarget>(StringComparer.InvariantCultureIgnoreCase);
         private readonly string m_configPath;
         private readonly string m_pipeName;
+        private readonly ManualResetEvent m_stopRequested = new ManualResetEvent(false);
         private bool m_stopping;
         private Thread m_pipeThread;
 
@@ -54,6 +55,14 @@ namespace ISCSIConsole
                 {
                     return m_targets.Count;
                 }
+            }
+        }
+
+        public bool StopRequested
+        {
+            get
+            {
+                return m_stopRequested.WaitOne(0);
             }
         }
 
@@ -201,8 +210,7 @@ namespace ISCSIConsole
                         {
                             builder.Append(" disk=\"");
                             builder.Append(disk.Path);
-                            builder.Append("\" cacheMB=");
-                            builder.Append(disk.CacheSizeMB);
+                            builder.Append("\"");
                         }
                         else if (disk.Type == DiskConfiguration.TypePhysicalDisk)
                         {
@@ -328,6 +336,11 @@ namespace ISCSIConsole
                 if (verb == "SAVE")
                 {
                     return Save();
+                }
+                if (verb == "STOP")
+                {
+                    m_stopRequested.Set();
+                    return "OK STOPPING";
                 }
 
                 return "ERROR Unknown management command: " + verb;

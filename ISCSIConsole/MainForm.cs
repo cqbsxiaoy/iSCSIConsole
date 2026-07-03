@@ -85,6 +85,12 @@ namespace ISCSIConsole
         {
             if (!m_started)
             {
+                if (m_targets.Count == 0)
+                {
+                    MessageBox.Show("请先添加至少一个 iSCSI 目标。", "错误");
+                    return;
+                }
+
                 IPAddress serverAddress = (IPAddress)comboIPAddress.SelectedValue;
                 int port = Conversion.ToInt32(txtPort.Text, 0);
                 if (port <= 0 || port > UInt16.MaxValue)
@@ -230,7 +236,7 @@ namespace ISCSIConsole
             {
                 if (m_started)
                 {
-                    lblStatus.Text = String.Format("{0} | {1} 个活动会话", GetBrandStatusText(), m_usageCounter.SessionCount);
+                    lblStatus.Text = String.Format("{0} 个活动会话", m_usageCounter.SessionCount);
                 }
 
                 if (listTargets.SelectedIndices.Count > 0)
