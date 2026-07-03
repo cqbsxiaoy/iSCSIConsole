@@ -251,13 +251,21 @@ namespace ISCSIConsole
                     Console.WriteLine("STOP_REQUESTED stopfile=\"{0}\"", stopFilePath);
                 }
 
-                if (WaitForServiceStop(statePath, processId, 30000))
+                if (WaitForServiceStop(statePath, processId, 5000))
                 {
                     Console.WriteLine("STOPPED");
                     return 0;
                 }
 
-                Console.Error.WriteLine("ERROR: The running service did not exit within the timeout.");
+                if (KillServiceProcess(processId, 5000))
+                {
+                    DeleteFileIfExists(statePath);
+                    DeleteFileIfExists(stopFilePath);
+                    Console.WriteLine("STOPPED force=true");
+                    return 0;
+                }
+
+                Console.Error.WriteLine("ERROR: The running service did not exit within the timeout and could not be terminated.");
                 return 1;
             }
             catch (Exception ex)
@@ -598,6 +606,35 @@ namespace ISCSIConsole
             }
 
             return !File.Exists(statePath);
+        }
+
+        private static bool KillServiceProcess(int processId, int timeoutMilliseconds)
+        {
+            if (processId <= 0 || processId == Process.GetCurrentProcess().Id)
+            {
+                return false;
+            }
+
+            try
+            {
+                Process process = Process.GetProcessById(processId);
+                if (process.HasExited)
+                {
+                    return true;
+                }
+
+                process.Kill();
+                return process.WaitForExit(timeoutMilliseconds);
+            }
+            catch (ArgumentException)
+            {
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine("WARNING: Failed to terminate service process {0}: {1}", processId, ex.Message);
+                return false;
+            }
         }
 
         private static DiskImage OpenDiskImage(string diskPath, bool readOnly)

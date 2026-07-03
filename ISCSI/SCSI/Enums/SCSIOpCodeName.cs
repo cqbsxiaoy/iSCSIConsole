@@ -25,6 +25,7 @@ namespace SCSI
         LoadUnload = 0x1B,
         StartStopUnit = 0x1B,
         ReceiveDiagnosticResults = 0x1C,
+        PreventAllowMediumRemoval = 0x1E,
         ReadCapacity10 = 0x25,
         Read10 = 0x28,
         Write10 = 0x2A,

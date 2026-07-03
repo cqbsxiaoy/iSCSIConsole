@@ -29,6 +29,7 @@ namespace ISCSIConsole
         private readonly string m_pipeName;
         private readonly ManualResetEvent m_stopRequested = new ManualResetEvent(false);
         private bool m_stopping;
+        private bool m_serverStopQueued;
         private Thread m_pipeThread;
 
         public HeadlessServiceRuntime(ISCSIServer server, ServiceConfiguration configuration, string configPath)
@@ -340,6 +341,8 @@ namespace ISCSIConsole
                 if (verb == "STOP")
                 {
                     m_stopRequested.Set();
+                    m_stopping = true;
+                    QueueServerStop();
                     return "OK STOPPING";
                 }
 
@@ -367,6 +370,36 @@ namespace ISCSIConsole
             catch
             {
             }
+        }
+
+        private void QueueServerStop()
+        {
+            bool shouldQueue = false;
+            lock (m_lock)
+            {
+                if (!m_serverStopQueued)
+                {
+                    m_serverStopQueued = true;
+                    shouldQueue = true;
+                }
+            }
+
+            if (!shouldQueue)
+            {
+                return;
+            }
+
+            ThreadPool.QueueUserWorkItem(delegate(object state)
+            {
+                try
+                {
+                    m_server.Stop();
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine("WARNING: Failed to stop iSCSI server: " + ex.Message);
+                }
+            });
         }
 
         public static string SendManagementCommand(string pipeName, string command)

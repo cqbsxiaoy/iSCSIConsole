@@ -35,7 +35,7 @@ namespace SCSI
 
         public override byte[] GetBytes()
         {
-            byte[] buffer = new byte[16];
+            byte[] buffer = new byte[12];
             buffer[0] = (byte)OpCode;
             buffer[1] |= (byte)(MiscellaneousCDBInformationHeader << 5);
             buffer[1] |= (byte)((byte)ServiceAction & 0x1F);
