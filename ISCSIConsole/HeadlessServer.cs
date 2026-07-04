@@ -19,6 +19,7 @@ namespace ISCSIConsole
         private const int DefaultPort = 3260;
         private const int GracefulStopWaitMilliseconds = 1000;
         private const int ForceKillWaitMilliseconds = 3000;
+        private static bool m_diagnosticLogEnabled;
 
         public static bool IsServeCommand(string[] args)
         {
@@ -46,32 +47,55 @@ namespace ISCSIConsole
                 return 2;
             }
 
-            if (options.Mode == ServeMode.StopConfig)
+            bool logOpened = false;
+            try
             {
-                return StopConfiguredServer(options);
-            }
-            if (options.Mode == ServeMode.StartConfig)
-            {
-                return RunConfiguredServer(options);
-            }
-            if (options.Mode == ServeMode.AddTarget)
-            {
-                return SendAddTargetCommand(options);
-            }
-            if (options.Mode == ServeMode.RemoveTarget)
-            {
-                return SendRemoveTargetCommand(options);
-            }
-            if (options.Mode == ServeMode.ListTargets)
-            {
-                return SendSimpleManagementCommand(options, "LIST");
-            }
-            if (options.Mode == ServeMode.SaveConfig)
-            {
-                return SendSimpleManagementCommand(options, "SAVE");
-            }
+                if (!String.IsNullOrEmpty(options.LogPath))
+                {
+                    if (!Program.OpenLogFile(options.LogPath))
+                    {
+                        WriteError(options, "Cannot open log file: " + options.LogPath);
+                        return 1;
+                    }
+                    logOpened = true;
+                    m_diagnosticLogEnabled = true;
+                }
 
-            return RunSingleDiskServer(options);
+                if (options.Mode == ServeMode.StopConfig)
+                {
+                    return StopConfiguredServer(options);
+                }
+                if (options.Mode == ServeMode.StartConfig)
+                {
+                    return RunConfiguredServer(options);
+                }
+                if (options.Mode == ServeMode.AddTarget)
+                {
+                    return SendAddTargetCommand(options);
+                }
+                if (options.Mode == ServeMode.RemoveTarget)
+                {
+                    return SendRemoveTargetCommand(options);
+                }
+                if (options.Mode == ServeMode.ListTargets)
+                {
+                    return SendSimpleManagementCommand(options, "LIST");
+                }
+                if (options.Mode == ServeMode.SaveConfig)
+                {
+                    return SendSimpleManagementCommand(options, "SAVE");
+                }
+
+                return RunSingleDiskServer(options);
+            }
+            finally
+            {
+                m_diagnosticLogEnabled = false;
+                if (logOpened)
+                {
+                    Program.CloseLogFile();
+                }
+            }
         }
 
         private static int RunSingleDiskServer(ServeOptions options)
@@ -83,11 +107,12 @@ namespace ISCSIConsole
             string stopFilePath = String.IsNullOrEmpty(options.StopFilePath) ? GetDefaultStopFilePath(options.ConfigPath) : options.StopFilePath;
             try
             {
-                DiskImage disk = OpenDiskImage(options.DiskPath, options.ReadOnly);
+                DiskImage disk = OpenAndLockDiskImage(options.DiskPath, options.ReadOnly);
                 disks = new List<Disk>();
                 disks.Add(disk);
 
                 ISCSITarget target = new ISCSITarget(options.TargetName, disks);
+                AttachTargetDiagnosticLog(target);
                 target.OnAuthorizationRequest += delegate(object sender, AuthorizationRequestArgs request)
                 {
                     request.Accept = true;
@@ -294,6 +319,7 @@ namespace ISCSIConsole
                 {
                     Console.WriteLine("SESSION_TERMINATED target={0} initiator={1}", targetConfiguration.TargetName, request.InitiatorName);
                 };
+                AttachTargetDiagnosticLog(target);
                 if (allDisks != null)
                 {
                     allDisks.AddRange(disks);
@@ -325,7 +351,7 @@ namespace ISCSIConsole
                 {
                     throw new FileNotFoundException("Disk image was not found.", path);
                 }
-                DiskImage diskImage = OpenDiskImage(path, diskConfiguration.ReadOnly);
+                DiskImage diskImage = OpenAndLockDiskImage(path, diskConfiguration.ReadOnly);
                 return diskImage;
             }
 
@@ -633,6 +659,59 @@ namespace ISCSIConsole
             return DiskImage.GetDiskImage(diskPath, readOnly);
         }
 
+        private static DiskImage OpenAndLockDiskImage(string diskPath, bool readOnly)
+        {
+            DiskImage diskImage = OpenDiskImage(diskPath, readOnly);
+            bool isLocked = false;
+            Exception lockException = null;
+
+            try
+            {
+                isLocked = diskImage.ExclusiveLock();
+            }
+            catch (IOException ex)
+            {
+                lockException = ex;
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                lockException = ex;
+            }
+
+            if (!isLocked && !diskImage.IsReadOnly)
+            {
+                try
+                {
+                    diskImage.ReleaseLock();
+                }
+                catch
+                {
+                }
+
+                if (lockException != null)
+                {
+                    throw new IOException("Cannot lock the disk image for exclusive access: " + diskPath, lockException);
+                }
+                throw new IOException("Cannot lock the disk image for exclusive access: " + diskPath);
+            }
+
+            if (!isLocked)
+            {
+                Console.Error.WriteLine("WARNING: Disk image was opened read-only but could not be exclusively locked: " + diskPath);
+            }
+
+            Console.WriteLine(
+                "DISK_READY path=\"{0}\" type={1} readonly={2} locked={3} size={4} bytesPerSector={5}",
+                diskPath,
+                diskImage.GetType().Name,
+                diskImage.IsReadOnly,
+                isLocked,
+                diskImage.Size,
+                diskImage.BytesPerSector);
+
+            return diskImage;
+        }
+
         private static bool TryParseOptions(string[] args, out ServeOptions options, out string error)
         {
             options = new ServeOptions();
@@ -785,6 +864,13 @@ namespace ISCSIConsole
                         return false;
                     }
                 }
+                else if (IsOption(key, "log"))
+                {
+                    if (!TryReadValue(args, ref index, out options.LogPath, out error))
+                    {
+                        return false;
+                    }
+                }
                 else if (IsOption(key, "stopfile"))
                 {
                     if (!TryReadValue(args, ref index, out options.StopFilePath, out error))
@@ -891,6 +977,13 @@ namespace ISCSIConsole
                         return false;
                     }
                 }
+                else if (IsOption(key, "log"))
+                {
+                    if (!TryReadValue(args, ref index, out options.LogPath, out error))
+                    {
+                        return false;
+                    }
+                }
                 else if (IsOption(key, "stopfile"))
                 {
                     if (!TryReadValue(args, ref index, out options.StopFilePath, out error))
@@ -986,6 +1079,13 @@ namespace ISCSIConsole
                         return false;
                     }
                 }
+                else if (IsOption(key, "log"))
+                {
+                    if (!TryReadValue(args, ref index, out options.LogPath, out error))
+                    {
+                        return false;
+                    }
+                }
                 else if (IsOption(key, "help") || IsOption(key, "?"))
                 {
                     error = GetUsage();
@@ -1056,6 +1156,13 @@ namespace ISCSIConsole
                 else if (IsOption(key, "status"))
                 {
                     if (!TryReadValue(args, ref index, out options.StatusPath, out error))
+                    {
+                        return false;
+                    }
+                }
+                else if (IsOption(key, "log"))
+                {
+                    if (!TryReadValue(args, ref index, out options.LogPath, out error))
                     {
                         return false;
                     }
@@ -1269,7 +1376,33 @@ namespace ISCSIConsole
 
         private static void Server_OnLogEntry(object sender, LogEntry entry)
         {
+            if (m_diagnosticLogEnabled)
+            {
+                Program.OnLogEntry(sender, entry);
+            }
             Console.WriteLine("{0:u} [{1}] {2}: {3}", entry.Time, entry.Severity, entry.Source, entry.Message);
+        }
+
+        private static void Target_OnLogEntry(object sender, LogEntry entry)
+        {
+            if (m_diagnosticLogEnabled)
+            {
+                Program.OnLogEntry(sender, entry);
+            }
+        }
+
+        private static void AttachTargetDiagnosticLog(ISCSITarget target)
+        {
+            if (!m_diagnosticLogEnabled || target == null)
+            {
+                return;
+            }
+
+            SCSI.VirtualSCSITarget virtualTarget = target.SCSITarget as SCSI.VirtualSCSITarget;
+            if (virtualTarget != null)
+            {
+                virtualTarget.OnLogEntry += Target_OnLogEntry;
+            }
         }
 
         private static void EnsureFirewallRule(int port)
@@ -1338,10 +1471,10 @@ namespace ISCSIConsole
         private static string GetUsage()
         {
             return "Usage:\r\n" +
-                   "  ISCSIConsole.exe <path.vhdx> [target-name] [/listen 0.0.0.0] [/port 3260] [/readonly] [/status <path>] [/stopfile <path>]\r\n" +
-                   "  ISCSIConsole.exe /start [/config <path>] [/listen <ip>] [/port <port>] [/status <path>]\r\n" +
+                   "  ISCSIConsole.exe <path.vhdx> [target-name] [/listen 0.0.0.0] [/port 3260] [/readonly] [/status <path>] [/stopfile <path>] [/log <path>]\r\n" +
+                   "  ISCSIConsole.exe /start [/config <path>] [/listen <ip>] [/port <port>] [/status <path>] [/log <path>]\r\n" +
                    "  ISCSIConsole.exe /stop [/config <path>]\r\n" +
-                   "  ISCSIConsole.exe /addtarget <path.vhdx> [target-name] [/config <path>] [/readonly] [/nosave]\r\n" +
+                   "  ISCSIConsole.exe /addtarget <path.vhdx> [target-name] [/config <path>] [/readonly] [/nosave] [/log <path>]\r\n" +
                    "  ISCSIConsole.exe /removetarget <target-name> [/config <path>] [/nosave]\r\n" +
                    "  ISCSIConsole.exe /list [/config <path>]\r\n" +
                    "  ISCSIConsole.exe /save [/config <path>]";
@@ -1373,6 +1506,7 @@ namespace ISCSIConsole
             public string ConfigPath;
             public string StatusPath;
             public string StopFilePath;
+            public string LogPath;
         }
     }
 }
