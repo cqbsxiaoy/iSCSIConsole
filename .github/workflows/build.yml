@@ -79,6 +79,28 @@ jobs:
           path: artifacts/iSCSIConsole-net472.zip
           if-no-files-found: error
 
+      - name: Collect unmerged files
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path artifacts/iSCSIConsole-net472-unmerged -Force | Out-Null
+          Copy-Item -Path ISCSIConsole/bin/Release/net472/*.exe -Destination artifacts/iSCSIConsole-net472-unmerged/
+          Copy-Item -Path ISCSIConsole/bin/Release/net472/*.dll -Destination artifacts/iSCSIConsole-net472-unmerged/
+          Copy-Item -Path ISCSIConsole/bin/Release/net472/*.config -Destination artifacts/iSCSIConsole-net472-unmerged/ -ErrorAction SilentlyContinue
+          Copy-Item -LiteralPath License.txt -Destination artifacts/iSCSIConsole-net472-unmerged/
+          Copy-Item -LiteralPath Readme.md -Destination artifacts/iSCSIConsole-net472-unmerged/
+
+      - name: Create unmerged archive
+        shell: pwsh
+        run: |
+          Compress-Archive -Path artifacts/iSCSIConsole-net472-unmerged/* -DestinationPath artifacts/iSCSIConsole-net472-unmerged.zip -Force
+
+      - name: Upload unmerged package
+        uses: actions/upload-artifact@v4
+        with:
+          name: iSCSIConsole-net472-unmerged
+          path: artifacts/iSCSIConsole-net472-unmerged.zip
+          if-no-files-found: error
+
       - name: Update latest tag
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
         shell: pwsh
