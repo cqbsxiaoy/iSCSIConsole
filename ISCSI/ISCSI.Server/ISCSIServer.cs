@@ -25,7 +25,6 @@ namespace ISCSI.Server
         public static int MinimumWorkerThreads = 128;
         public static int MinimumCompletionPortThreads = 128;
         private const int SendPollTimeoutMicroseconds = 1000 * 1000;
-        private const int SendTimeoutMilliseconds = 30 * 1000;
 
         private Socket m_listenerSocket;
         private bool m_listening;
@@ -199,8 +198,6 @@ namespace ISCSI.Server
             state.ConnectionParameters.InitiatorEndPoint = clientSocket.RemoteEndPoint as IPEndPoint;
             // Disable the Nagle Algorithm for this tcp socket:
             clientSocket.NoDelay = true;
-            clientSocket.Blocking = true;
-            clientSocket.SendTimeout = SendTimeoutMilliseconds;
             state.ClientSocket = clientSocket;
             Thread senderThread = new Thread(delegate()
             {
