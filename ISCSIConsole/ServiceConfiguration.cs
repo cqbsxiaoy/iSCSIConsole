@@ -106,6 +106,13 @@ namespace ISCSIConsole
             {
                 Disks = new List<DiskConfiguration>();
             }
+            foreach (DiskConfiguration disk in Disks)
+            {
+                if (disk != null)
+                {
+                    disk.Normalize();
+                }
+            }
         }
     }
 
@@ -134,6 +141,25 @@ namespace ISCSIConsole
         public int PhysicalDiskIndex { get; set; }
 
         public string VolumeGuid { get; set; }
+
+        public void Normalize()
+        {
+            if (String.IsNullOrEmpty(Type))
+            {
+                return;
+            }
+
+            if (!Type.Equals(TypeDiskImage, StringComparison.InvariantCultureIgnoreCase))
+            {
+                CacheSizeMB = 0;
+                return;
+            }
+
+            if (CacheSizeMB < 0)
+            {
+                CacheSizeMB = 0;
+            }
+        }
 
         public static DiskConfiguration CreateDiskImage(string path, bool readOnly)
         {

@@ -17,7 +17,7 @@ This fork / 本分支更新
 6. 命令行启动时会尝试自动添加 Windows 防火墙 TCP 3260 入站规则，减少首次启动时的手动干预。
 7. GUI 可保存当前服务配置，命令行可按配置文件启动或停止服务。
 8. 后台服务支持运行中添加、移除、查看和保存 VHD/VHDX Target，无需重启服务。
-9. 命令行和后台服务默认直接访问磁盘镜像，避免额外读缓存影响客户端挂载兼容性。
+9. 命令行和后台服务为 VHD/VHDX 磁盘镜像提供只读块缓存，默认 256MB；写入会自动清理相关缓存块，可用 `/cachemb 0` 关闭。
 10. 修正 READ(6) / WRITE(6) 长度为 0 时应表示 256 个块的兼容性问题。
 11. 增强虚拟磁盘目标的 SCSI 兼容性，补充 MODE SENSE(10)、READ/WRITE/VERIFY(12)、SYNCHRONIZE CACHE(16) 等常见命令处理。
 12. 改进 `/stop`，停止请求会立即关闭服务；若服务进程短时间内未退出，会按状态文件中的进程号终止。
@@ -59,6 +59,7 @@ Optional arguments:
 - `/listen <ip>`: listen address. Use `0.0.0.0` for all interfaces. Default is all interfaces.
 - `/port <port>`: TCP port. Default is `3260`.
 - `/readonly`: open the disk image read-only.
+- `/cachemb <MB>`: read cache size for VHD / VHDX disk images. Default is `256`; use `0` to disable.
 - `/status <path>`: write `READY ...` or `ERROR ...` status text for scripts.
 - `/stopfile <path>`: exit when this file appears.
 
@@ -99,6 +100,8 @@ Add a VHD / VHDX target while the saved service is already running:
 ```bat
 iSCSIConsole.exe /addtarget D:\iSCSI\001122AABBCC.vhdx pc-001122aabbcc
 ```
+
+Use `/cachemb <MB>` with command line target mode or `/addtarget` to change the read cache size for that disk image. Saved service configuration stores this value as `CacheSizeMB` on each disk image entry.
 
 Remove, list, or save runtime targets:
 

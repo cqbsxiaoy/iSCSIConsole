@@ -7,7 +7,7 @@ namespace ISCSIConsole
 {
     public class CachedDisk : Disk
     {
-        public const int DefaultCacheSizeMB = 0;
+        public const int DefaultCacheSizeMB = 256;
         public const int DefaultBlockSizeKB = 64;
 
         private class CacheEntry
@@ -20,6 +20,7 @@ namespace ISCSIConsole
         private readonly Disk m_innerDisk;
         private readonly int m_blockSectorCount;
         private readonly long m_maxBytes;
+        private readonly int m_cacheSizeMB;
         private readonly object m_lock = new object();
         private readonly Dictionary<long, CacheEntry> m_entries = new Dictionary<long, CacheEntry>();
         private readonly LinkedList<long> m_lru = new LinkedList<long>();
@@ -31,12 +32,13 @@ namespace ISCSIConsole
             {
                 throw new ArgumentNullException("innerDisk");
             }
-            if (cacheSizeMB <= 0)
+            if (cacheSizeMB < 0)
             {
-                cacheSizeMB = DefaultCacheSizeMB;
+                throw new ArgumentOutOfRangeException("cacheSizeMB");
             }
 
             m_innerDisk = innerDisk;
+            m_cacheSizeMB = cacheSizeMB;
             m_maxBytes = (long)cacheSizeMB * 1024 * 1024;
             m_blockSectorCount = Math.Max(1, (DefaultBlockSizeKB * 1024) / innerDisk.BytesPerSector);
         }
@@ -44,6 +46,10 @@ namespace ISCSIConsole
         public override byte[] ReadSectors(long sectorIndex, int sectorCount)
         {
             int byteCount = CheckDiskBoundaries(sectorIndex, sectorCount);
+            if (m_maxBytes == 0)
+            {
+                return m_innerDisk.ReadSectors(sectorIndex, sectorCount);
+            }
 
             byte[] result = new byte[byteCount];
             int resultOffset = 0;
@@ -96,8 +102,15 @@ namespace ISCSIConsole
 
             lock (m_lock)
             {
-                m_innerDisk.WriteSectors(sectorIndex, data);
                 InvalidateRange(sectorIndex, sectorCount);
+                try
+                {
+                    m_innerDisk.WriteSectors(sectorIndex, data);
+                }
+                finally
+                {
+                    InvalidateRange(sectorIndex, sectorCount);
+                }
             }
         }
 
@@ -130,6 +143,14 @@ namespace ISCSIConsole
             get
             {
                 return m_innerDisk;
+            }
+        }
+
+        public int CacheSizeMB
+        {
+            get
+            {
+                return m_cacheSizeMB;
             }
         }
 

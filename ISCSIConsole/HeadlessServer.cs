@@ -107,7 +107,8 @@ namespace ISCSIConsole
             string stopFilePath = String.IsNullOrEmpty(options.StopFilePath) ? GetDefaultStopFilePath(options.ConfigPath) : options.StopFilePath;
             try
             {
-                DiskImage disk = OpenAndLockDiskImage(options.DiskPath, options.ReadOnly);
+                DiskImage diskImage = OpenAndLockDiskImage(options.DiskPath, options.ReadOnly);
+                Disk disk = ApplyReadCache(diskImage, options.CacheSizeMB);
                 disks = new List<Disk>();
                 disks.Add(disk);
 
@@ -132,14 +133,15 @@ namespace ISCSIConsole
                 WriteState(statePath, stopFilePath, runtime.PipeName);
 
                 string ready = String.Format(
-                    "READY iqn={0} address={1} port={2} disk=\"{3}\" readonly={4} size={5} bytesPerSector={6} pipe={7}",
+                    "READY iqn={0} address={1} port={2} disk=\"{3}\" readonly={4} size={5} bytesPerSector={6} cacheMB={7} pipe={8}",
                     options.TargetName,
                     options.ListenAddress,
                     options.Port,
                     options.DiskPath,
-                    disk.IsReadOnly,
-                    disk.Size,
-                    disk.BytesPerSector,
+                    diskImage.IsReadOnly,
+                    diskImage.Size,
+                    diskImage.BytesPerSector,
+                    GetReadCacheSizeMB(disk),
                     runtime.PipeName);
                 Console.WriteLine(ready);
                 WriteStatus(options.StatusPath, ready);
@@ -352,7 +354,7 @@ namespace ISCSIConsole
                     throw new FileNotFoundException("Disk image was not found.", path);
                 }
                 DiskImage diskImage = OpenAndLockDiskImage(path, diskConfiguration.ReadOnly);
-                return diskImage;
+                return ApplyReadCache(diskImage, diskConfiguration.CacheSizeMB);
             }
 
             if (diskConfiguration.Type.Equals(DiskConfiguration.TypePhysicalDisk, StringComparison.InvariantCultureIgnoreCase))
@@ -366,6 +368,32 @@ namespace ISCSIConsole
             }
 
             throw new InvalidDataException("Unsupported disk type in service configuration: " + diskConfiguration.Type);
+        }
+
+        private static Disk ApplyReadCache(Disk disk, int cacheSizeMB)
+        {
+            if (disk == null)
+            {
+                throw new ArgumentNullException("disk");
+            }
+            if (cacheSizeMB <= 0)
+            {
+                return disk;
+            }
+
+            CachedDisk cachedDisk = new CachedDisk(disk, cacheSizeMB);
+            Console.WriteLine(
+                "READ_CACHE_READY type={0} cacheMB={1} blockKB={2}",
+                disk.GetType().Name,
+                cachedDisk.CacheSizeMB,
+                CachedDisk.DefaultBlockSizeKB);
+            return cachedDisk;
+        }
+
+        private static int GetReadCacheSizeMB(Disk disk)
+        {
+            CachedDisk cachedDisk = disk as CachedDisk;
+            return cachedDisk != null ? cachedDisk.CacheSizeMB : 0;
         }
 
         private static int SendAddTargetCommand(ServeOptions options)
@@ -1471,10 +1499,10 @@ namespace ISCSIConsole
         private static string GetUsage()
         {
             return "Usage:\r\n" +
-                   "  ISCSIConsole.exe <path.vhdx> [target-name] [/listen 0.0.0.0] [/port 3260] [/readonly] [/status <path>] [/stopfile <path>] [/log <path>]\r\n" +
+                   "  ISCSIConsole.exe <path.vhdx> [target-name] [/listen 0.0.0.0] [/port 3260] [/readonly] [/cachemb 256] [/status <path>] [/stopfile <path>] [/log <path>]\r\n" +
                    "  ISCSIConsole.exe /start [/config <path>] [/listen <ip>] [/port <port>] [/status <path>] [/log <path>]\r\n" +
                    "  ISCSIConsole.exe /stop [/config <path>]\r\n" +
-                   "  ISCSIConsole.exe /addtarget <path.vhdx> [target-name] [/config <path>] [/readonly] [/nosave] [/log <path>]\r\n" +
+                   "  ISCSIConsole.exe /addtarget <path.vhdx> [target-name] [/config <path>] [/readonly] [/cachemb 256] [/nosave] [/log <path>]\r\n" +
                    "  ISCSIConsole.exe /removetarget <target-name> [/config <path>] [/nosave]\r\n" +
                    "  ISCSIConsole.exe /list [/config <path>]\r\n" +
                    "  ISCSIConsole.exe /save [/config <path>]";
