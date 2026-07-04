@@ -12,10 +12,12 @@ namespace ISCSIConsole
     public partial class SelectDiskImageForm : Form
     {
         private DiskImage m_diskImage;
+        private int m_cacheSizeMB = CachedDisk.DefaultCacheSizeMB;
 
         public SelectDiskImageForm()
         {
             InitializeComponent();
+            numericCacheSize.Value = CachedDisk.DefaultCacheSizeMB;
         }
 
         private void btnCancel_Click(object sender, EventArgs e)
@@ -93,6 +95,7 @@ namespace ISCSIConsole
             {
                 MessageBox.Show("磁盘镜像无法以读写方式打开，已自动改为只读方式。", "提示");
             }
+            m_cacheSizeMB = (int)numericCacheSize.Value;
             m_diskImage = diskImage;
             this.DialogResult = DialogResult.OK;
             this.Close();
@@ -149,6 +152,14 @@ namespace ISCSIConsole
             get
             {
                 return m_diskImage;
+            }
+        }
+
+        public int CacheSizeMB
+        {
+            get
+            {
+                return m_cacheSizeMB;
             }
         }
     }

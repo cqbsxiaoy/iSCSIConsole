@@ -61,7 +61,9 @@ namespace ISCSIConsole
                 if (result == DialogResult.OK)
                 {
                     DiskImage diskImage = createDiskImage.DiskImage;
-                    AddDisk(diskImage, DiskConfiguration.CreateDiskImage(diskImage.Path, diskImage.IsReadOnly));
+                    AddDisk(
+                        CreateTargetDisk(diskImage, createDiskImage.CacheSizeMB),
+                        DiskConfiguration.CreateDiskImage(diskImage.Path, diskImage.IsReadOnly, createDiskImage.CacheSizeMB));
                 }
             }
         }
@@ -73,7 +75,9 @@ namespace ISCSIConsole
             if (result == DialogResult.OK)
             {
                 DiskImage diskImage = selectDiskImage.DiskImage;
-                AddDisk(diskImage, DiskConfiguration.CreateDiskImage(diskImage.Path, diskImage.IsReadOnly));
+                AddDisk(
+                    CreateTargetDisk(diskImage, selectDiskImage.CacheSizeMB),
+                    DiskConfiguration.CreateDiskImage(diskImage.Path, diskImage.IsReadOnly, selectDiskImage.CacheSizeMB));
             }
         }
 
@@ -109,19 +113,24 @@ namespace ISCSIConsole
         {
             string description = String.Empty;
             string sizeString = FormattingHelper.GetStandardSizeString(disk.Size);
-            if (disk is DiskImage)
+            Disk displayDisk = disk is CachedDisk ? ((CachedDisk)disk).InnerDisk : disk;
+            if (displayDisk is DiskImage)
             {
-                description = ((DiskImage)disk).Path;
+                description = ((DiskImage)displayDisk).Path;
+                if (disk is CachedDisk)
+                {
+                    description += String.Format(" (读缓存 {0} MB)", ((CachedDisk)disk).CacheSizeMB);
+                }
             }
-            else if (disk is RAMDisk)
+            else if (displayDisk is RAMDisk)
             {
                 description = "RAM 磁盘";
             }
-            else if (disk is PhysicalDisk) // Win32 only
+            else if (displayDisk is PhysicalDisk) // Win32 only
             {
-                description = String.Format("物理磁盘 {0}", ((PhysicalDisk)disk).PhysicalDiskIndex);
+                description = String.Format("物理磁盘 {0}", ((PhysicalDisk)displayDisk).PhysicalDiskIndex);
             }
-            else if (disk is VolumeDisk) // Win32 only
+            else if (displayDisk is VolumeDisk) // Win32 only
             {
                 description = String.Format("卷");
             }
@@ -131,6 +140,16 @@ namespace ISCSIConsole
             listDisks.Items.Add(item);
             m_disks.Add(disk);
             m_diskConfigurations.Add(diskConfiguration);
+        }
+
+        private static Disk CreateTargetDisk(DiskImage diskImage, int cacheSizeMB)
+        {
+            if (cacheSizeMB <= 0)
+            {
+                return diskImage;
+            }
+
+            return new CachedDisk(diskImage, cacheSizeMB);
         }
 
         private void btnRemove_Click(object sender, EventArgs e)

@@ -9,6 +9,7 @@ using System.Collections.Generic;
 using System.Text;
 using DiskAccessLibrary;
 using DiskAccessLibrary.Win32;
+using ISCSI.Logging;
 
 namespace ISCSIConsole
 {
@@ -26,7 +27,13 @@ namespace ISCSIConsole
         {
             if (disk is CachedDisk)
             {
-                ReleaseDisk(((CachedDisk)disk).InnerDisk);
+                CachedDisk cachedDisk = (CachedDisk)disk;
+                string statistics = cachedDisk.GetStatistics();
+                Console.WriteLine("READ_CACHE_STATS " + statistics);
+                Program.OnLogEntry(
+                    null,
+                    new LogEntry(DateTime.Now, Severity.Information, "Read Cache", statistics));
+                ReleaseDisk(cachedDisk.InnerDisk);
             }
             else if (disk is DiskImage)
             {

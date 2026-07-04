@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using DiskAccessLibrary;
 
@@ -25,6 +26,12 @@ namespace ISCSIConsole
         private readonly Dictionary<long, CacheEntry> m_entries = new Dictionary<long, CacheEntry>();
         private readonly LinkedList<long> m_lru = new LinkedList<long>();
         private long m_cachedBytes;
+        private long m_readCommands;
+        private long m_blocksRequested;
+        private long m_cacheHits;
+        private long m_cacheMisses;
+        private long m_evictions;
+        private long m_writeInvalidations;
 
         public CachedDisk(Disk innerDisk, int cacheSizeMB)
         {
@@ -58,6 +65,7 @@ namespace ISCSIConsole
 
             lock (m_lock)
             {
+                m_readCommands++;
                 while (remainingSectors > 0)
                 {
                     long blockIndex = currentSector / m_blockSectorCount;
@@ -154,15 +162,40 @@ namespace ISCSIConsole
             }
         }
 
+        public string GetStatistics()
+        {
+            lock (m_lock)
+            {
+                double hitRate = m_blocksRequested > 0 ? (m_cacheHits * 100.0) / m_blocksRequested : 0;
+                double cachedMB = m_cachedBytes / 1024.0 / 1024.0;
+                return String.Format(
+                    CultureInfo.InvariantCulture,
+                    "cacheMB={0} blockKB={1} readCommands={2} blocks={3} hits={4} misses={5} hitRate={6:0.0}% cachedMB={7:0.0} evictions={8} writeInvalidations={9}",
+                    m_cacheSizeMB,
+                    DefaultBlockSizeKB,
+                    m_readCommands,
+                    m_blocksRequested,
+                    m_cacheHits,
+                    m_cacheMisses,
+                    hitRate,
+                    cachedMB,
+                    m_evictions,
+                    m_writeInvalidations);
+            }
+        }
+
         private CacheEntry GetOrReadBlock(long blockIndex)
         {
+            m_blocksRequested++;
             CacheEntry entry;
             if (m_entries.TryGetValue(blockIndex, out entry))
             {
+                m_cacheHits++;
                 Touch(entry);
                 return entry;
             }
 
+            m_cacheMisses++;
             long blockStartSector = blockIndex * m_blockSectorCount;
             long sectorsInDisk = Size / BytesPerSector;
             int sectorsToRead = (int)Math.Min(m_blockSectorCount, sectorsInDisk - blockStartSector);
@@ -224,7 +257,10 @@ namespace ISCSIConsole
             long lastBlock = (sectorIndex + sectorCount - 1) / m_blockSectorCount;
             for (long blockIndex = firstBlock; blockIndex <= lastBlock; blockIndex++)
             {
-                RemoveBlock(blockIndex);
+                if (RemoveBlock(blockIndex, false))
+                {
+                    m_writeInvalidations++;
+                }
             }
         }
 
@@ -232,11 +268,11 @@ namespace ISCSIConsole
         {
             while (m_cachedBytes > m_maxBytes && m_lru.Count > 0)
             {
-                RemoveBlock(m_lru.Last.Value);
+                RemoveBlock(m_lru.Last.Value, true);
             }
         }
 
-        private void RemoveBlock(long blockIndex)
+        private bool RemoveBlock(long blockIndex, bool evicted)
         {
             CacheEntry entry;
             if (m_entries.TryGetValue(blockIndex, out entry))
@@ -244,7 +280,14 @@ namespace ISCSIConsole
                 m_lru.Remove(entry.Node);
                 m_entries.Remove(blockIndex);
                 m_cachedBytes -= entry.Data.Length;
+                if (evicted)
+                {
+                    m_evictions++;
+                }
+                return true;
             }
+
+            return false;
         }
     }
 }

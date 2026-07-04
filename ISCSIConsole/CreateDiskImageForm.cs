@@ -13,11 +13,13 @@ namespace ISCSIConsole
     public partial class CreateDiskImageForm : Form
     {
         private DiskImage m_diskImage;
+        private int m_cacheSizeMB = CachedDisk.DefaultCacheSizeMB;
         private bool m_isWorking = false;
 
         public CreateDiskImageForm()
         {
             InitializeComponent();
+            numericCacheSize.Value = CachedDisk.DefaultCacheSizeMB;
         }
 
         private void btnCancel_Click(object sender, EventArgs e)
@@ -35,6 +37,7 @@ namespace ISCSIConsole
                 MessageBox.Show("请选择文件位置", "错误");
                 return;
             }
+            m_cacheSizeMB = (int)numericCacheSize.Value;
             m_isWorking = true;
             new Thread(delegate()
             {
@@ -60,6 +63,7 @@ namespace ISCSIConsole
                         txtFilePath.Enabled = true;
                         btnBrowse.Enabled = true;
                         numericDiskSize.Enabled = true;
+                        numericCacheSize.Enabled = true;
                         btnOK.Enabled = true;
                         btnCancel.Enabled = true;
                     });
@@ -75,6 +79,7 @@ namespace ISCSIConsole
                         txtFilePath.Enabled = true;
                         btnBrowse.Enabled = true;
                         numericDiskSize.Enabled = true;
+                        numericCacheSize.Enabled = true;
                         btnOK.Enabled = true;
                         btnCancel.Enabled = true;
                     });
@@ -92,6 +97,7 @@ namespace ISCSIConsole
             txtFilePath.Enabled = false;
             btnBrowse.Enabled = false;
             numericDiskSize.Enabled = false;
+            numericCacheSize.Enabled = false;
             btnOK.Enabled = false;
             btnCancel.Enabled = false;
         }
@@ -110,6 +116,14 @@ namespace ISCSIConsole
             get
             {
                 return m_diskImage;
+            }
+        }
+
+        public int CacheSizeMB
+        {
+            get
+            {
+                return m_cacheSizeMB;
             }
         }
 

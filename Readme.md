@@ -17,7 +17,7 @@ This fork / 本分支更新
 6. 命令行启动时会尝试自动添加 Windows 防火墙 TCP 3260 入站规则，减少首次启动时的手动干预。
 7. GUI 可保存当前服务配置，命令行可按配置文件启动或停止服务。
 8. 后台服务支持运行中添加、移除、查看和保存 VHD/VHDX Target，无需重启服务。
-9. 命令行和后台服务为 VHD/VHDX 磁盘镜像提供只读块缓存，默认 256MB；写入会自动清理相关缓存块，可用 `/cachemb 0` 关闭。
+9. 命令行、后台服务和 GUI 为 VHD/VHDX 磁盘镜像提供只读块缓存，默认 256MB；写入会自动清理相关缓存块，可用 `/cachemb 0` 或 GUI 中的 `0` 关闭。
 10. 修正 READ(6) / WRITE(6) 长度为 0 时应表示 256 个块的兼容性问题。
 11. 增强虚拟磁盘目标的 SCSI 兼容性，补充 MODE SENSE(10)、READ/WRITE/VERIFY(12)、SYNCHRONIZE CACHE(16) 等常见命令处理。
 12. 改进 `/stop`，停止请求会立即关闭服务；若服务进程短时间内未退出，会按状态文件中的进程号终止。
@@ -63,10 +63,13 @@ Optional arguments:
 - `/status <path>`: write `READY ...` or `ERROR ...` status text for scripts.
 - `/stopfile <path>`: exit when this file appears.
 
+When `/log <path>` is enabled, cache statistics are written when a cached disk is released.
+
 Saved service configuration:
 ============================
 The GUI can save the current target list to `iSCSIConsole.service.xml` in the program directory.
 The saved configuration includes the listen address, TCP port, target IQNs and supported disks.
+For VHD / VHDX disk images, the GUI can also save the read cache size.
 
 Supported saved disk types:
 
