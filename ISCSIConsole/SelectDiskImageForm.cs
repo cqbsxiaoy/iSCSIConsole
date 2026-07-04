@@ -134,6 +134,18 @@ namespace ISCSIConsole
             {
                 return new VhdxDiskImage(path, readOnly);
             }
+
+            if (path.EndsWith(".vhd", StringComparison.InvariantCultureIgnoreCase))
+            {
+                try
+                {
+                    return DiskImage.GetDiskImage(path, readOnly);
+                }
+                catch (NotImplementedException)
+                {
+                    return new VhdDiskImage(path, readOnly);
+                }
+            }
 #endif
             return DiskImage.GetDiskImage(path, readOnly);
         }

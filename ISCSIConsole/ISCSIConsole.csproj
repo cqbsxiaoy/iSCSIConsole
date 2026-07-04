@@ -23,6 +23,7 @@
 
   <ItemGroup>
     <PackageReference Include="DiskAccessLibrary.Win32" Version="1.6.3" />
+    <PackageReference Include="DiscUtils.Vhd" Version="0.16.13" Condition=" '$(TargetFramework)' != 'net20' " />
     <PackageReference Include="DiscUtils.Vhdx" Version="0.16.13" Condition=" '$(TargetFramework)' != 'net20' " />
   </ItemGroup>
 

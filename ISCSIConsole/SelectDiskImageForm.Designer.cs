@@ -70,7 +70,7 @@ namespace ISCSIConsole
             //
             // btnOK
             //
-            this.btnOK.Location = new System.Drawing.Point(224, 118);
+            this.btnOK.Location = new System.Drawing.Point(224, 88);
             this.btnOK.Name = "btnOK";
             this.btnOK.Size = new System.Drawing.Size(75, 23);
             this.btnOK.TabIndex = 9;
@@ -81,7 +81,7 @@ namespace ISCSIConsole
             // btnCancel
             //
             this.btnCancel.DialogResult = System.Windows.Forms.DialogResult.Cancel;
-            this.btnCancel.Location = new System.Drawing.Point(305, 118);
+            this.btnCancel.Location = new System.Drawing.Point(305, 88);
             this.btnCancel.Name = "btnCancel";
             this.btnCancel.Size = new System.Drawing.Size(75, 23);
             this.btnCancel.TabIndex = 10;
@@ -106,7 +106,7 @@ namespace ISCSIConsole
             // lblCacheSize
             //
             this.lblCacheSize.AutoSize = true;
-            this.lblCacheSize.Location = new System.Drawing.Point(12, 74);
+            this.lblCacheSize.Location = new System.Drawing.Point(92, 46);
             this.lblCacheSize.Name = "lblCacheSize";
             this.lblCacheSize.Size = new System.Drawing.Size(46, 13);
             this.lblCacheSize.TabIndex = 7;
@@ -114,7 +114,7 @@ namespace ISCSIConsole
             //
             // numericCacheSize
             //
-            this.numericCacheSize.Location = new System.Drawing.Point(70, 71);
+            this.numericCacheSize.Location = new System.Drawing.Point(150, 43);
             this.numericCacheSize.Maximum = new decimal(new int[] {
             1048576,
             0,
@@ -133,7 +133,7 @@ namespace ISCSIConsole
             // lblCacheMB
             //
             this.lblCacheMB.AutoSize = true;
-            this.lblCacheMB.Location = new System.Drawing.Point(162, 74);
+            this.lblCacheMB.Location = new System.Drawing.Point(242, 46);
             this.lblCacheMB.Name = "lblCacheMB";
             this.lblCacheMB.Size = new System.Drawing.Size(23, 13);
             this.lblCacheMB.TabIndex = 11;
@@ -144,7 +144,7 @@ namespace ISCSIConsole
             this.AcceptButton = this.btnOK;
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.None;
             this.CancelButton = this.btnCancel;
-            this.ClientSize = new System.Drawing.Size(394, 155);
+            this.ClientSize = new System.Drawing.Size(394, 125);
             this.Controls.Add(this.lblCacheMB);
             this.Controls.Add(this.numericCacheSize);
             this.Controls.Add(this.lblCacheSize);
@@ -157,8 +157,8 @@ namespace ISCSIConsole
             this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedSingle;
             this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
             this.MaximizeBox = false;
-            this.MaximumSize = new System.Drawing.Size(420, 200);
-            this.MinimumSize = new System.Drawing.Size(420, 200);
+            this.MaximumSize = new System.Drawing.Size(400, 150);
+            this.MinimumSize = new System.Drawing.Size(400, 150);
             this.Name = "SelectDiskImageForm";
             this.SizeGripStyle = System.Windows.Forms.SizeGripStyle.Hide;
             this.Text = "选择磁盘镜像";

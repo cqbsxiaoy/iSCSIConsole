@@ -679,10 +679,24 @@ namespace ISCSIConsole
 
         private static DiskImage OpenDiskImage(string diskPath, bool readOnly)
         {
+#if !NET20
             if (diskPath.EndsWith(".vhdx", StringComparison.InvariantCultureIgnoreCase))
             {
                 return new VhdxDiskImage(diskPath, readOnly);
             }
+
+            if (diskPath.EndsWith(".vhd", StringComparison.InvariantCultureIgnoreCase))
+            {
+                try
+                {
+                    return DiskImage.GetDiskImage(diskPath, readOnly);
+                }
+                catch (NotImplementedException)
+                {
+                    return new VhdDiskImage(diskPath, readOnly);
+                }
+            }
+#endif
 
             return DiskImage.GetDiskImage(diskPath, readOnly);
         }
@@ -1499,10 +1513,10 @@ namespace ISCSIConsole
         private static string GetUsage()
         {
             return "Usage:\r\n" +
-                   "  ISCSIConsole.exe <path.vhdx> [target-name] [/listen 0.0.0.0] [/port 3260] [/readonly] [/cachemb 256] [/status <path>] [/stopfile <path>] [/log <path>]\r\n" +
+                   "  ISCSIConsole.exe <path.vhd|path.vhdx> [target-name] [/listen 0.0.0.0] [/port 3260] [/readonly] [/cachemb 256] [/status <path>] [/stopfile <path>] [/log <path>]\r\n" +
                    "  ISCSIConsole.exe /start [/config <path>] [/listen <ip>] [/port <port>] [/status <path>] [/log <path>]\r\n" +
                    "  ISCSIConsole.exe /stop [/config <path>]\r\n" +
-                   "  ISCSIConsole.exe /addtarget <path.vhdx> [target-name] [/config <path>] [/readonly] [/cachemb 256] [/nosave] [/log <path>]\r\n" +
+                   "  ISCSIConsole.exe /addtarget <path.vhd|path.vhdx> [target-name] [/config <path>] [/readonly] [/cachemb 256] [/nosave] [/log <path>]\r\n" +
                    "  ISCSIConsole.exe /removetarget <target-name> [/config <path>] [/nosave]\r\n" +
                    "  ISCSIConsole.exe /list [/config <path>]\r\n" +
                    "  ISCSIConsole.exe /save [/config <path>]";

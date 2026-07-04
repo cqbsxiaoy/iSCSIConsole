@@ -13,5 +13,6 @@ IF NOT EXIST "%outputPath%" MKDIR "%outputPath%"
 set inputFiles="%binaryPath%\ISCSIConsole.exe" "%binaryPath%\Utilities.dll" "%binaryPath%\DiskAccessLibrary.dll" "%binaryPath%\DiskAccessLibrary.Win32.dll" "%binaryPath%\ISCSI.dll"
 IF EXIST "%binaryPath%\DiscUtils.Core.dll" set inputFiles=%inputFiles% "%binaryPath%\DiscUtils.Core.dll"
 IF EXIST "%binaryPath%\DiscUtils.Streams.dll" set inputFiles=%inputFiles% "%binaryPath%\DiscUtils.Streams.dll"
+IF EXIST "%binaryPath%\DiscUtils.Vhd.dll" set inputFiles=%inputFiles% "%binaryPath%\DiscUtils.Vhd.dll"
 IF EXIST "%binaryPath%\DiscUtils.Vhdx.dll" set inputFiles=%inputFiles% "%binaryPath%\DiscUtils.Vhdx.dll"
 "%ilmergeExe%" /targetplatform=%TargetPlaform% /ndebug /target:winexe /out:"%outputPath%\ISCSIConsole.exe" %inputFiles%
