@@ -1,5 +1,5 @@
 /* Copyright (C) 2012-2017 Tal Aloni <tal.aloni.il@gmail.com>. All rights reserved.
- * 
+ *
  * You can redistribute this program and/or modify it under the terms of
  * the GNU Lesser Public License as published by the Free Software Foundation,
  * either version 3 of the License, or (at your option) any later version.
@@ -29,10 +29,6 @@ namespace SCSI
             uint temp = BigEndianReader.ReadUInt24(buffer, offset + 1);
             LogicalBlockAddress = temp & 0x1FFFFF;
             TransferLength = buffer[offset + 4];
-            if ((OpCode == SCSIOpCodeName.Read6 || OpCode == SCSIOpCodeName.Write6) && TransferLength == 0)
-            {
-                TransferLength = 256;
-            }
             Control = buffer[offset + 5];
         }
 
@@ -44,14 +40,7 @@ namespace SCSI
             buffer[1] |= (byte)((LogicalBlockAddress >> 16) & 0x1F);
             buffer[2] = (byte)((LogicalBlockAddress >> 8) & 0xFF);
             buffer[3] = (byte)((LogicalBlockAddress >> 0) & 0xFF);
-            if ((OpCode == SCSIOpCodeName.Read6 || OpCode == SCSIOpCodeName.Write6) && TransferLength == 256)
-            {
-                buffer[4] = 0;
-            }
-            else
-            {
-                buffer[4] = (byte)TransferLength;
-            }
+            buffer[4] = (byte)TransferLength;
             buffer[5] = Control;
             return buffer;
         }

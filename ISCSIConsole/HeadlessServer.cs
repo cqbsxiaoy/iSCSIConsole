@@ -17,6 +17,8 @@ namespace ISCSIConsole
     {
         private const string DefaultTargetPrefix = "iqn.1991-05.com.microsoft";
         private const int DefaultPort = 3260;
+        private const int GracefulStopWaitMilliseconds = 1000;
+        private const int ForceKillWaitMilliseconds = 3000;
 
         public static bool IsServeCommand(string[] args)
         {
@@ -232,32 +234,16 @@ namespace ISCSIConsole
                     stopFilePath = GetDefaultStopFilePath(options.ConfigPath);
                 }
 
-                bool pipeStopRequested = false;
-                try
-                {
-                    string pipeName = ReadStatePipeName(statePath);
-                    string response = HeadlessServiceRuntime.SendManagementCommand(pipeName, "STOP");
-                    Console.WriteLine(response);
-                    pipeStopRequested = response.StartsWith("OK", StringComparison.InvariantCultureIgnoreCase);
-                }
-                catch (Exception ex)
-                {
-                    Console.Error.WriteLine("WARNING: Failed to send management stop command: " + ex.Message);
-                }
-
                 WriteStatus(stopFilePath, "stop");
-                if (!pipeStopRequested)
-                {
-                    Console.WriteLine("STOP_REQUESTED stopfile=\"{0}\"", stopFilePath);
-                }
+                Console.WriteLine("STOP_REQUESTED pid={0} stopfile=\"{1}\"", processId, stopFilePath);
 
-                if (WaitForServiceStop(statePath, processId, 5000))
+                if (WaitForServiceStop(statePath, processId, GracefulStopWaitMilliseconds))
                 {
                     Console.WriteLine("STOPPED");
                     return 0;
                 }
 
-                if (KillServiceProcess(processId, 5000))
+                if (KillServiceProcess(processId, ForceKillWaitMilliseconds))
                 {
                     DeleteFileIfExists(statePath);
                     DeleteFileIfExists(stopFilePath);

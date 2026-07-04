@@ -1,5 +1,5 @@
 /* Copyright (C) 2012-2016 Tal Aloni <tal.aloni.il@gmail.com>. All rights reserved.
- * 
+ *
  * You can redistribute this program and/or modify it under the terms of
  * the GNU Lesser Public License as published by the Free Software Foundation,
  * either version 3 of the License, or (at your option) any later version.
@@ -23,7 +23,7 @@ namespace SCSI
         public byte Control;
 
         protected SCSICommandDescriptorBlock()
-        { 
+        {
         }
 
         public abstract byte[] GetBytes();
@@ -49,12 +49,6 @@ namespace SCSI
                     return new SCSICommandDescriptorBlock6(buffer, offset);
                 case SCSIOpCodeName.ModeSense6:
                     return new ModeSense6CommandDescriptorBlock(buffer, offset);
-                case SCSIOpCodeName.StartStopUnit:
-                    return new SCSICommandDescriptorBlock6(buffer, offset);
-                case SCSIOpCodeName.PreventAllowMediumRemoval:
-                    return new SCSICommandDescriptorBlock6(buffer, offset);
-                case SCSIOpCodeName.ModeSense10:
-                    return new ModeSense10CommandDescriptorBlock(buffer, offset);
                 case SCSIOpCodeName.ReadCapacity10:
                     return new SCSICommandDescriptorBlock10(buffer, offset);
                 case SCSIOpCodeName.Read10:
@@ -67,19 +61,11 @@ namespace SCSI
                     return new SCSICommandDescriptorBlock10(buffer, offset);
                 case SCSIOpCodeName.WriteSame10:
                     return new SCSICommandDescriptorBlock10(buffer, offset);
-                case SCSIOpCodeName.Read12:
-                    return new SCSICommandDescriptorBlock12(buffer, offset);
-                case SCSIOpCodeName.Write12:
-                    return new SCSICommandDescriptorBlock12(buffer, offset);
-                case SCSIOpCodeName.Verify12:
-                    return new SCSICommandDescriptorBlock12(buffer, offset);
                 case SCSIOpCodeName.Read16:
                     return new SCSICommandDescriptorBlock16(buffer, offset);
                 case SCSIOpCodeName.Write16:
                     return new SCSICommandDescriptorBlock16(buffer, offset);
                 case SCSIOpCodeName.Verify16:
-                    return new SCSICommandDescriptorBlock16(buffer, offset);
-                case SCSIOpCodeName.SynchronizeCache16:
                     return new SCSICommandDescriptorBlock16(buffer, offset);
                 case SCSIOpCodeName.WriteSame16:
                     return new SCSICommandDescriptorBlock16(buffer, offset);
@@ -112,12 +98,6 @@ namespace SCSI
                     return new SCSICommandDescriptorBlock6(opCode);
                 case SCSIOpCodeName.ModeSense6:
                     return new ModeSense6CommandDescriptorBlock();
-                case SCSIOpCodeName.StartStopUnit:
-                    return new SCSICommandDescriptorBlock6(opCode);
-                case SCSIOpCodeName.PreventAllowMediumRemoval:
-                    return new SCSICommandDescriptorBlock6(opCode);
-                case SCSIOpCodeName.ModeSense10:
-                    return new ModeSense10CommandDescriptorBlock();
                 case SCSIOpCodeName.ReadCapacity10:
                     return new SCSICommandDescriptorBlock10(opCode);
                 case SCSIOpCodeName.Read10:
@@ -130,19 +110,11 @@ namespace SCSI
                     return new SCSICommandDescriptorBlock10(opCode);
                 case SCSIOpCodeName.WriteSame10:
                     return new SCSICommandDescriptorBlock10(opCode);
-                case SCSIOpCodeName.Read12:
-                    return new SCSICommandDescriptorBlock12(opCode);
-                case SCSIOpCodeName.Write12:
-                    return new SCSICommandDescriptorBlock12(opCode);
-                case SCSIOpCodeName.Verify12:
-                    return new SCSICommandDescriptorBlock12(opCode);
                 case SCSIOpCodeName.Read16:
                     return new SCSICommandDescriptorBlock16(opCode);
                 case SCSIOpCodeName.Write16:
                     return new SCSICommandDescriptorBlock16(opCode);
                 case SCSIOpCodeName.Verify16:
-                    return new SCSICommandDescriptorBlock16(opCode);
-                case SCSIOpCodeName.SynchronizeCache16:
                     return new SCSICommandDescriptorBlock16(opCode);
                 case SCSIOpCodeName.WriteSame16:
                     return new SCSICommandDescriptorBlock16(opCode);

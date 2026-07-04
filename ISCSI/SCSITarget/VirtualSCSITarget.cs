@@ -1,5 +1,5 @@
 /* Copyright (C) 2012-2017 Tal Aloni <tal.aloni.il@gmail.com>. All rights reserved.
- * 
+ *
  * You can redistribute this program and/or modify it under the terms of
  * the GNU Lesser Public License as published by the Free Software Foundation,
  * either version 3 of the License, or (at your option) any later version.
@@ -65,11 +65,6 @@ namespace SCSI
             {
                 return TestUnitReady(lun, out response);
             }
-            else if (command.OpCode == SCSIOpCodeName.StartStopUnit ||
-                     command.OpCode == SCSIOpCodeName.PreventAllowMediumRemoval)
-            {
-                return NoOperation(lun, out response);
-            }
             else if (command.OpCode == SCSIOpCodeName.RequestSense)
             {
                 uint allocationLength = command.TransferLength;
@@ -91,36 +86,28 @@ namespace SCSI
             {
                 return ModeSense6((ModeSense6CommandDescriptorBlock)command, lun, out response);
             }
-            else if (command.OpCode == SCSIOpCodeName.ModeSense10)
-            {
-                return ModeSense10((ModeSense10CommandDescriptorBlock)command, lun, out response);
-            }
             else if (command.OpCode == SCSIOpCodeName.ReadCapacity10)
             {
                 return ReadCapacity10(lun, out response);
             }
             else if (command.OpCode == SCSIOpCodeName.Read6 ||
                      command.OpCode == SCSIOpCodeName.Read10 ||
-                     command.OpCode == SCSIOpCodeName.Read12 ||
                      command.OpCode == SCSIOpCodeName.Read16)
             {
                 return Read(command, lun, out response);
             }
             else if (command.OpCode == SCSIOpCodeName.Write6 ||
                      command.OpCode == SCSIOpCodeName.Write10 ||
-                     command.OpCode == SCSIOpCodeName.Write12 ||
                      command.OpCode == SCSIOpCodeName.Write16)
             {
                 return Write(command, lun, data, out response);
             }
             else if (command.OpCode == SCSIOpCodeName.Verify10 ||
-                     command.OpCode == SCSIOpCodeName.Verify12 ||
                      command.OpCode == SCSIOpCodeName.Verify16)
             {
                 return Verify(lun, out response);
             }
-            else if (command.OpCode == SCSIOpCodeName.SynchronizeCache10 ||
-                     command.OpCode == SCSIOpCodeName.SynchronizeCache16)
+            else if (command.OpCode == SCSIOpCodeName.SynchronizeCache10)
             {
                 return SynchronizeCache10(lun, out response);
             }
@@ -236,9 +223,72 @@ namespace SCSI
             Log(Severity.Verbose, "ModeSense6: Page code: 0x{0}, Sub page code: 0x{1}", command.PageCode.ToString("X"), command.SubpageCode.ToString("X"));
             byte[] pageData;
 
-            if (!TryGetModePageData((ModePageCodeName)command.PageCode, command.SubpageCode, out pageData, out response))
+            switch ((ModePageCodeName)command.PageCode)
             {
-                return SCSIStatusCodeName.CheckCondition;
+                case ModePageCodeName.CachingParametersPage:
+                    {
+                        CachingParametersPage page = new CachingParametersPage();
+                        page.RCD = true;
+                        pageData = page.GetBytes();
+                        break;
+                    }
+                case ModePageCodeName.ControlModePage:
+                    {
+                        ControlModePage page = new ControlModePage();
+                        pageData = page.GetBytes();
+                        break;
+                    }
+                case ModePageCodeName.PowerConditionModePage:
+                    {
+                        if (command.SubpageCode == 0x00)
+                        {
+                            PowerConditionModePage page = new PowerConditionModePage();
+                            pageData = page.GetBytes();
+                            break;
+                        }
+                        else if (command.SubpageCode == 0x01)
+                        {
+                            PowerConsumptionModePage page = new PowerConsumptionModePage();
+                            pageData = page.GetBytes();
+                            break;
+                        }
+                        else
+                        {
+                            Log(Severity.Error, "ModeSense6: Power condition subpage 0x{0} is not implemented", command.SubpageCode.ToString("x"));
+                            response = FormatSenseData(SenseDataParameter.GetIllegalRequestInvalidFieldInCDBSenseData());
+                            return SCSIStatusCodeName.CheckCondition;
+                        }
+                    }
+                case ModePageCodeName.InformationalExceptionsControlModePage:
+                    {
+                        InformationalExceptionsControlModePage page = new InformationalExceptionsControlModePage();
+                        pageData = page.GetBytes();
+                        break;
+                    }
+                case ModePageCodeName.ReturnAllPages:
+                    {
+                        CachingParametersPage page1 = new CachingParametersPage();
+                        page1.RCD = true;
+                        InformationalExceptionsControlModePage page2 = new InformationalExceptionsControlModePage();
+
+                        pageData = new byte[page1.Length + page2.Length];
+                        Array.Copy(page1.GetBytes(), pageData, page1.Length);
+                        Array.Copy(page2.GetBytes(), 0, pageData, page1.Length, page2.Length);
+                        break;
+                    }
+                case ModePageCodeName.VendorSpecificPage:
+                    {
+                        // Windows 2000 will request this page, we immitate Microsoft iSCSI Target by sending back an empty page
+                        VendorSpecificPage page = new VendorSpecificPage();
+                        pageData = page.GetBytes();
+                        break;
+                    }
+                default:
+                    {
+                        Log(Severity.Error, "ModeSense6: ModeSense6 page 0x{0} is not implemented", command.PageCode.ToString("x"));
+                        response = FormatSenseData(SenseDataParameter.GetIllegalRequestInvalidFieldInCDBSenseData());
+                        return SCSIStatusCodeName.CheckCondition;
+                    }
             }
 
             ModeParameterHeader6 header = new ModeParameterHeader6();
@@ -248,7 +298,6 @@ namespace SCSI
             if (!command.DBD)
             {
                 ShortLBAModeParameterBlockDescriptor descriptor = new ShortLBAModeParameterBlockDescriptor();
-                descriptor.NumberOfBlocks = GetShortBlockCount(lun);
                 descriptor.LogicalBlockLength = (uint)m_disks[lun].BytesPerSector;
                 descriptorBytes = descriptor.GetBytes();
             }
@@ -266,134 +315,6 @@ namespace SCSI
                 response = ByteReader.ReadBytes(response, 0, command.AllocationLength);
             }
             return SCSIStatusCodeName.Good;
-        }
-
-        public SCSIStatusCodeName ModeSense10(ModeSense10CommandDescriptorBlock command, LUNStructure lun, out byte[] response)
-        {
-            Log(Severity.Verbose, "ModeSense10: Page code: 0x{0}, Sub page code: 0x{1}", command.PageCode.ToString("X"), command.SubpageCode.ToString("X"));
-            byte[] pageData;
-
-            if (!TryGetModePageData((ModePageCodeName)command.PageCode, command.SubpageCode, out pageData, out response))
-            {
-                return SCSIStatusCodeName.CheckCondition;
-            }
-
-            ModeParameterHeader10 header = new ModeParameterHeader10();
-            header.WP = m_disks[lun].IsReadOnly;
-            header.DPOFUA = true;
-            byte[] descriptorBytes = new byte[0];
-            if (!command.DBD)
-            {
-                if (command.LLBAA)
-                {
-                    LongLBAModeParameterBlockDescriptor descriptor = new LongLBAModeParameterBlockDescriptor();
-                    descriptor.NumberOfBlocks = GetBlockCount(lun);
-                    descriptor.LogicalBlockLength = (uint)m_disks[lun].BytesPerSector;
-                    descriptorBytes = descriptor.GetBytes();
-                    header.LongLBA = true;
-                }
-                else
-                {
-                    ShortLBAModeParameterBlockDescriptor descriptor = new ShortLBAModeParameterBlockDescriptor();
-                    descriptor.NumberOfBlocks = GetShortBlockCount(lun);
-                    descriptor.LogicalBlockLength = (uint)m_disks[lun].BytesPerSector;
-                    descriptorBytes = descriptor.GetBytes();
-                }
-            }
-            header.BlockDescriptorLength = (ushort)descriptorBytes.Length;
-            header.ModeDataLength += (ushort)(descriptorBytes.Length + pageData.Length);
-
-            response = new byte[2 + header.ModeDataLength];
-            Array.Copy(header.GetBytes(), 0, response, 0, ModeParameterHeader10.Length);
-            Array.Copy(descriptorBytes, 0, response, ModeParameterHeader10.Length, descriptorBytes.Length);
-            Array.Copy(pageData, 0, response, ModeParameterHeader10.Length + descriptorBytes.Length, pageData.Length);
-
-            if (response.Length > command.AllocationLength)
-            {
-                response = ByteReader.ReadBytes(response, 0, command.AllocationLength);
-            }
-            return SCSIStatusCodeName.Good;
-        }
-
-        private bool TryGetModePageData(ModePageCodeName pageCode, byte subpageCode, out byte[] pageData, out byte[] senseResponse)
-        {
-            senseResponse = null;
-            switch (pageCode)
-            {
-                case ModePageCodeName.CachingParametersPage:
-                    {
-                        CachingParametersPage page = new CachingParametersPage();
-                        page.RCD = true;
-                        pageData = page.GetBytes();
-                        return true;
-                    }
-                case ModePageCodeName.ControlModePage:
-                    {
-                        ControlModePage page = new ControlModePage();
-                        pageData = page.GetBytes();
-                        return true;
-                    }
-                case ModePageCodeName.PowerConditionModePage:
-                    {
-                        if (subpageCode == 0x00)
-                        {
-                            PowerConditionModePage page = new PowerConditionModePage();
-                            pageData = page.GetBytes();
-                            return true;
-                        }
-                        if (subpageCode == 0x01)
-                        {
-                            PowerConsumptionModePage page = new PowerConsumptionModePage();
-                            pageData = page.GetBytes();
-                            return true;
-                        }
-                        Log(Severity.Error, "ModeSense: Power condition subpage 0x{0} is not implemented", subpageCode.ToString("x"));
-                        pageData = null;
-                        senseResponse = FormatSenseData(SenseDataParameter.GetIllegalRequestInvalidFieldInCDBSenseData());
-                        return false;
-                    }
-                case ModePageCodeName.InformationalExceptionsControlModePage:
-                    {
-                        InformationalExceptionsControlModePage page = new InformationalExceptionsControlModePage();
-                        pageData = page.GetBytes();
-                        return true;
-                    }
-                case ModePageCodeName.ReturnAllPages:
-                    {
-                        CachingParametersPage page1 = new CachingParametersPage();
-                        page1.RCD = true;
-                        InformationalExceptionsControlModePage page2 = new InformationalExceptionsControlModePage();
-
-                        pageData = new byte[page1.Length + page2.Length];
-                        Array.Copy(page1.GetBytes(), pageData, page1.Length);
-                        Array.Copy(page2.GetBytes(), 0, pageData, page1.Length, page2.Length);
-                        return true;
-                    }
-                case ModePageCodeName.VendorSpecificPage:
-                    {
-                        VendorSpecificPage page = new VendorSpecificPage();
-                        pageData = page.GetBytes();
-                        return true;
-                    }
-                default:
-                    {
-                        Log(Severity.Error, "ModeSense: page 0x{0} is not implemented", pageCode.ToString("x"));
-                        pageData = null;
-                        senseResponse = FormatSenseData(SenseDataParameter.GetIllegalRequestInvalidFieldInCDBSenseData());
-                        return false;
-                    }
-            }
-        }
-
-        private ulong GetBlockCount(LUNStructure lun)
-        {
-            return (ulong)(m_disks[lun].Size / m_disks[lun].BytesPerSector);
-        }
-
-        private uint GetShortBlockCount(LUNStructure lun)
-        {
-            ulong blockCount = GetBlockCount(lun);
-            return blockCount <= UInt32.MaxValue ? (uint)blockCount : 0;
         }
 
         public SCSIStatusCodeName ReadCapacity10(LUNStructure lun, out byte[] response)
@@ -488,12 +409,6 @@ namespace SCSI
         }
 
         public SCSIStatusCodeName TestUnitReady(LUNStructure lun, out byte[] response)
-        {
-            response = new byte[0];
-            return SCSIStatusCodeName.Good;
-        }
-
-        public SCSIStatusCodeName NoOperation(LUNStructure lun, out byte[] response)
         {
             response = new byte[0];
             return SCSIStatusCodeName.Good;
