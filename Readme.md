@@ -19,8 +19,10 @@ This fork / 本分支更新
 8. 后台服务支持运行中添加、移除、查看和保存 VHD/VHDX Target，无需重启服务。
 9. 命令行、后台服务和 GUI 为 VHD/VHDX 磁盘镜像提供只读块缓存，默认 256MB；写入会自动清理相关缓存块，可用 `/cachemb 0` 或 GUI 中的 `0` 关闭。
 10. 修正 READ(6) / WRITE(6) 长度为 0 时应表示 256 个块的兼容性问题。
-11. 增强虚拟磁盘目标的 SCSI 兼容性，补充 MODE SENSE(10)、READ/WRITE/VERIFY(12)、SYNCHRONIZE CACHE(16) 等常见命令处理。
+11. 增强虚拟磁盘目标的 SCSI 兼容性，补充 READ/WRITE/VERIFY(12)、SYNCHRONIZE CACHE(16) 等常见命令处理。
 12. 改进 `/stop`，停止请求会立即关闭服务；若服务进程短时间内未退出，会按状态文件中的进程号终止。
+13. 修复写缓存语义：SYNCHRONIZE CACHE(10/16) 和 FUA 写入会将 VHD/VHDX 数据真正刷新到物理存储。
+14. 增加 `/singleclient`，按首个发起端来源 IP 锁定可写 Target，允许同一客户机在 iPXE 到 Windows 交接期间重连，并拒绝其它机器。
 
 Command line target mode:
 =========================
@@ -59,11 +61,14 @@ Optional arguments:
 - `/listen <ip>`: listen address. Use `0.0.0.0` for all interfaces. Default is all interfaces.
 - `/port <port>`: TCP port. Default is `3260`.
 - `/readonly`: open the disk image read-only.
+- `/singleclient`: lock this target to the first initiator source IP until the target process stops. This is recommended for a writable boot/update image.
 - `/cachemb <MB>`: read cache size for VHD / VHDX disk images. Default is `256`; use `0` to disable.
 - `/status <path>`: write `READY ...` or `ERROR ...` status text for scripts.
 - `/stopfile <path>`: exit when this file appears.
 
 When `/log <path>` is enabled, cache statistics are written when a cached disk is released.
+
+A writable VHD/VHDX must not be mounted by several Windows clients at the same time. Use one differencing disk per client for concurrent diskless boot, or use `/singleclient` when one machine boots a writable parent image for maintenance and update.
 
 Saved service configuration:
 ============================

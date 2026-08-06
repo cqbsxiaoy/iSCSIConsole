@@ -26,6 +26,7 @@ namespace SCSI
             OpCode = (SCSIOpCodeName)buffer[offset + 0];
             MiscellaneousCDBInformationHeader = (byte)((buffer[offset + 1] & 0xE0) >> 5);
             ServiceAction = (ServiceAction)((buffer[offset + 1] & 0x1F));
+            ForceUnitAccess = (buffer[offset + 1] & 0x08) != 0;
 
             LogicalBlockAddress = BigEndianConverter.ToUInt32(buffer, offset + 2);
             MiscellaneousCDBinformation = buffer[offset + 6];
@@ -39,6 +40,10 @@ namespace SCSI
             buffer[0] = (byte)OpCode;
             buffer[1] |= (byte)(MiscellaneousCDBInformationHeader << 5);
             buffer[1] |= (byte)((byte)ServiceAction & 0x1F);
+            if (ForceUnitAccess)
+            {
+                buffer[1] |= 0x08;
+            }
             BigEndianWriter.WriteUInt32(buffer, 2, LogicalBlockAddress);
             buffer[6] = MiscellaneousCDBinformation;
             BigEndianWriter.WriteUInt16(buffer, 7, (ushort)TransferLength);

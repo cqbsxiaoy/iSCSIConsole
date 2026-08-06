@@ -6,7 +6,7 @@ using DiskAccessLibrary;
 
 namespace ISCSIConsole
 {
-    public class CachedDisk : Disk
+    public class CachedDisk : Disk, SCSI.IFlushableDisk
     {
         public const int DefaultCacheSizeMB = 256;
         public const int DefaultBlockSizeKB = 64;
@@ -118,6 +118,18 @@ namespace ISCSIConsole
                 finally
                 {
                     InvalidateRange(sectorIndex, sectorCount);
+                }
+            }
+        }
+
+        public void Flush()
+        {
+            lock (m_lock)
+            {
+                SCSI.IFlushableDisk flushableDisk = m_innerDisk as SCSI.IFlushableDisk;
+                if (flushableDisk != null)
+                {
+                    flushableDisk.Flush();
                 }
             }
         }

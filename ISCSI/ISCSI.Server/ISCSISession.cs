@@ -122,23 +122,8 @@ namespace ISCSI.Server
         /// </summary>
         public static bool IsFirstCmdSNPreceding(uint cmdSN1, uint cmdSN2)
         {
-            // The iSCSI protocol is designed to avoid having old, retried command instances appear in a valid command window after a command sequence number wrap around.
-            const uint commandWindow = 2 ^ 31 - 1;
-            if (cmdSN2 >= commandWindow)
-            {
-                if ((cmdSN1 > cmdSN2 - commandWindow) && (cmdSN1 < cmdSN2))
-                {
-                    return true;
-                }
-            }
-            else
-            {
-                if ((cmdSN1 > cmdSN2 - commandWindow) || (cmdSN1 < cmdSN2))
-                {
-                    return true;
-                }
-            }
-            return false;
+            // RFC 1982 serial number arithmetic, also used by RFC 3720 for CmdSN.
+            return cmdSN1 != cmdSN2 && unchecked((int)(cmdSN1 - cmdSN2)) < 0;
         }
     }
 }

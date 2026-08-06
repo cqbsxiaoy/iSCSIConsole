@@ -39,6 +39,17 @@ jobs:
           /p:SkipILMerge=true
           /p:SkipILRepack=true
 
+      - name: Restore tests
+        run: msbuild ISCSIConsole.Tests/ISCSIConsole.Tests.csproj /t:Restore /p:Configuration=Release
+
+      - name: Build and run tests
+        shell: pwsh
+        run: |
+          msbuild ISCSIConsole.Tests/ISCSIConsole.Tests.csproj /p:Configuration=Release /p:SkipILMerge=true /p:SkipILRepack=true
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & ISCSIConsole.Tests/bin/Release/net472/ISCSIConsole.Tests.exe
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Merge single executable
         shell: pwsh
         run: |

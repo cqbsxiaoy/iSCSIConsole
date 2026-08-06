@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net472</TargetFramework>
+    <AssemblyName>ISCSIConsole.Tests</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ISCSIConsole\ISCSIConsole.csproj" />
+    <ProjectReference Include="..\ISCSI\ISCSI.csproj" />
+  </ItemGroup>
+</Project>

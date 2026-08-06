@@ -37,7 +37,18 @@ namespace ISCSIConsole
             }
             else if (disk is DiskImage)
             {
-                ((DiskImage)disk).ReleaseLock();
+                try
+                {
+                    SCSI.IFlushableDisk flushableDisk = disk as SCSI.IFlushableDisk;
+                    if (flushableDisk != null)
+                    {
+                        flushableDisk.Flush();
+                    }
+                }
+                finally
+                {
+                    ((DiskImage)disk).ReleaseLock();
+                }
             }
             else if (disk is RAMDisk)
             {

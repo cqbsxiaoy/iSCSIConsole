@@ -92,22 +92,26 @@ namespace SCSI
             }
             else if (command.OpCode == SCSIOpCodeName.Read6 ||
                      command.OpCode == SCSIOpCodeName.Read10 ||
+                     command.OpCode == SCSIOpCodeName.Read12 ||
                      command.OpCode == SCSIOpCodeName.Read16)
             {
                 return Read(command, lun, out response);
             }
             else if (command.OpCode == SCSIOpCodeName.Write6 ||
                      command.OpCode == SCSIOpCodeName.Write10 ||
+                     command.OpCode == SCSIOpCodeName.Write12 ||
                      command.OpCode == SCSIOpCodeName.Write16)
             {
                 return Write(command, lun, data, out response);
             }
             else if (command.OpCode == SCSIOpCodeName.Verify10 ||
+                     command.OpCode == SCSIOpCodeName.Verify12 ||
                      command.OpCode == SCSIOpCodeName.Verify16)
             {
                 return Verify(lun, out response);
             }
-            else if (command.OpCode == SCSIOpCodeName.SynchronizeCache10)
+            else if (command.OpCode == SCSIOpCodeName.SynchronizeCache10 ||
+                     command.OpCode == SCSIOpCodeName.SynchronizeCache16)
             {
                 return SynchronizeCache10(lun, out response);
             }
@@ -228,7 +232,7 @@ namespace SCSI
                 case ModePageCodeName.CachingParametersPage:
                     {
                         CachingParametersPage page = new CachingParametersPage();
-                        page.RCD = true;
+                        page.WCE = IsWriteCacheEnabled(lun);
                         pageData = page.GetBytes();
                         break;
                     }
@@ -268,7 +272,7 @@ namespace SCSI
                 case ModePageCodeName.ReturnAllPages:
                     {
                         CachingParametersPage page1 = new CachingParametersPage();
-                        page1.RCD = true;
+                        page1.WCE = IsWriteCacheEnabled(lun);
                         InformationalExceptionsControlModePage page2 = new InformationalExceptionsControlModePage();
 
                         pageData = new byte[page1.Length + page2.Length];
@@ -293,7 +297,8 @@ namespace SCSI
 
             ModeParameterHeader6 header = new ModeParameterHeader6();
             header.WP = m_disks[lun].IsReadOnly; // Write protected, even when set to true, Windows does not always prevent the disk from being written to.
-            header.DPOFUA = true;  // Microsoft iSCSI Target support this
+            // FUA is honored when received, but is not advertised as a fast path.
+            header.DPOFUA = false;
             byte[] descriptorBytes = new byte[0];
             if (!command.DBD)
             {
@@ -398,8 +403,7 @@ namespace SCSI
 
         public SCSIStatusCodeName SynchronizeCache10(LUNStructure lun, out byte[] response)
         {
-            response = new byte[0];
-            return SCSIStatusCodeName.Good;
+            return FlushDisk(lun, out response);
         }
 
         public SCSIStatusCodeName Release6(LUNStructure lun, out byte[] response)
@@ -435,6 +439,14 @@ namespace SCSI
             try
             {
                 disk.WriteSectors((long)command.LogicalBlockAddress64, data);
+                if (command.ForceUnitAccess)
+                {
+                    SCSIStatusCodeName flushStatus = FlushDisk(lun, out response);
+                    if (flushStatus != SCSIStatusCodeName.Good)
+                    {
+                        return flushStatus;
+                    }
+                }
                 response = new byte[0];
                 return SCSIStatusCodeName.Good;
             }
@@ -447,6 +459,35 @@ namespace SCSI
             catch (IOException ex)
             {
                 Log(Severity.Error, "Write error: {0}", ex.ToString());
+                response = FormatSenseData(SenseDataParameter.GetMediumErrorWriteFaultSenseData());
+                return SCSIStatusCodeName.CheckCondition;
+            }
+        }
+
+        private bool IsWriteCacheEnabled(LUNStructure lun)
+        {
+            Disk disk = m_disks[lun];
+            return !disk.IsReadOnly && disk is IFlushableDisk;
+        }
+
+        private SCSIStatusCodeName FlushDisk(LUNStructure lun, out byte[] response)
+        {
+            IFlushableDisk flushableDisk = m_disks[lun] as IFlushableDisk;
+            if (flushableDisk == null || m_disks[lun].IsReadOnly)
+            {
+                response = new byte[0];
+                return SCSIStatusCodeName.Good;
+            }
+
+            try
+            {
+                flushableDisk.Flush();
+                response = new byte[0];
+                return SCSIStatusCodeName.Good;
+            }
+            catch (Exception ex)
+            {
+                Log(Severity.Error, "Cache flush error: {0}", ex.ToString());
                 response = FormatSenseData(SenseDataParameter.GetMediumErrorWriteFaultSenseData());
                 return SCSIStatusCodeName.CheckCondition;
             }

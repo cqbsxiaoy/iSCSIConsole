@@ -21,6 +21,7 @@ namespace SCSI
         public uint TransferLength; // number of blocks, also doubles as Parameter list length /  Allocation length
         public byte MiscellaneousCDBinformation;
         public byte Control;
+        public bool ForceUnitAccess;
 
         protected SCSICommandDescriptorBlock()
         {
@@ -55,6 +56,12 @@ namespace SCSI
                     return new SCSICommandDescriptorBlock10(buffer, offset);
                 case SCSIOpCodeName.Write10:
                     return new SCSICommandDescriptorBlock10(buffer, offset);
+                case SCSIOpCodeName.Read12:
+                    return new SCSICommandDescriptorBlock12(buffer, offset);
+                case SCSIOpCodeName.Write12:
+                    return new SCSICommandDescriptorBlock12(buffer, offset);
+                case SCSIOpCodeName.Verify12:
+                    return new SCSICommandDescriptorBlock12(buffer, offset);
                 case SCSIOpCodeName.Verify10:
                     return new SCSICommandDescriptorBlock10(buffer, offset);
                 case SCSIOpCodeName.SynchronizeCache10:
@@ -66,6 +73,8 @@ namespace SCSI
                 case SCSIOpCodeName.Write16:
                     return new SCSICommandDescriptorBlock16(buffer, offset);
                 case SCSIOpCodeName.Verify16:
+                    return new SCSICommandDescriptorBlock16(buffer, offset);
+                case SCSIOpCodeName.SynchronizeCache16:
                     return new SCSICommandDescriptorBlock16(buffer, offset);
                 case SCSIOpCodeName.WriteSame16:
                     return new SCSICommandDescriptorBlock16(buffer, offset);
@@ -104,6 +113,12 @@ namespace SCSI
                     return new SCSICommandDescriptorBlock10(opCode);
                 case SCSIOpCodeName.Write10:
                     return new SCSICommandDescriptorBlock10(opCode);
+                case SCSIOpCodeName.Read12:
+                    return new SCSICommandDescriptorBlock12(opCode);
+                case SCSIOpCodeName.Write12:
+                    return new SCSICommandDescriptorBlock12(opCode);
+                case SCSIOpCodeName.Verify12:
+                    return new SCSICommandDescriptorBlock12(opCode);
                 case SCSIOpCodeName.Verify10:
                     return new SCSICommandDescriptorBlock10(opCode);
                 case SCSIOpCodeName.SynchronizeCache10:
@@ -115,6 +130,8 @@ namespace SCSI
                 case SCSIOpCodeName.Write16:
                     return new SCSICommandDescriptorBlock16(opCode);
                 case SCSIOpCodeName.Verify16:
+                    return new SCSICommandDescriptorBlock16(opCode);
+                case SCSIOpCodeName.SynchronizeCache16:
                     return new SCSICommandDescriptorBlock16(opCode);
                 case SCSIOpCodeName.WriteSame16:
                     return new SCSICommandDescriptorBlock16(opCode);

@@ -6,7 +6,7 @@ using DiscUtils.Streams;
 
 namespace ISCSIConsole
 {
-    public class VhdDiskImage : DiskImage
+    public class VhdDiskImage : DiskImage, SCSI.IFlushableDisk
     {
         private const int VhdBytesPerSector = 512;
 
@@ -14,6 +14,7 @@ namespace ISCSIConsole
         private DiscUtils.Vhd.Disk m_disk;
         private SparseStream m_content;
         private bool m_isReadOnly;
+        private FlushTrackingFileLocator m_fileLocator;
 
         public VhdDiskImage(string diskImagePath)
             : this(diskImagePath, false)
@@ -23,7 +24,7 @@ namespace ISCSIConsole
         public VhdDiskImage(string diskImagePath, bool isReadOnly)
             : base(diskImagePath, isReadOnly)
         {
-            m_disk = OpenDisk(diskImagePath, isReadOnly, out m_isReadOnly);
+            m_disk = OpenDisk(diskImagePath, isReadOnly, out m_isReadOnly, out m_fileLocator);
             m_content = m_disk.Content;
         }
 
@@ -69,6 +70,20 @@ namespace ISCSIConsole
             throw new NotImplementedException("VHD extension is not supported");
         }
 
+        public void Flush()
+        {
+            lock (m_syncRoot)
+            {
+                if (m_content == null || m_isReadOnly)
+                {
+                    return;
+                }
+
+                m_content.Flush();
+                m_fileLocator.FlushWritableStreams();
+            }
+        }
+
         public override bool ExclusiveLock()
         {
             return true;
@@ -111,6 +126,10 @@ namespace ISCSIConsole
                         m_disk = null;
                     }
                 }
+                if (m_fileLocator != null)
+                {
+                    m_fileLocator.DisposeStreams();
+                }
             }
             return true;
         }
@@ -139,28 +158,34 @@ namespace ISCSIConsole
             }
         }
 
-        private static DiscUtils.Vhd.Disk OpenDisk(string diskImagePath, bool isReadOnly, out bool actualReadOnly)
+        private static DiscUtils.Vhd.Disk OpenDisk(string diskImagePath, bool isReadOnly, out bool actualReadOnly, out FlushTrackingFileLocator fileLocator)
         {
+            string directory = Path.GetDirectoryName(Path.GetFullPath(diskImagePath));
+            string fileName = Path.GetFileName(diskImagePath);
             if (isReadOnly)
             {
                 actualReadOnly = true;
-                return new DiscUtils.Vhd.Disk(diskImagePath, FileAccess.Read);
+                fileLocator = new FlushTrackingFileLocator(directory);
+                return new DiscUtils.Vhd.Disk(fileLocator, fileName, FileAccess.Read);
             }
 
             try
             {
                 actualReadOnly = false;
-                return new DiscUtils.Vhd.Disk(diskImagePath, FileAccess.ReadWrite);
+                fileLocator = new FlushTrackingFileLocator(directory);
+                return new DiscUtils.Vhd.Disk(fileLocator, fileName, FileAccess.ReadWrite);
             }
             catch (UnauthorizedAccessException)
             {
                 actualReadOnly = true;
-                return new DiscUtils.Vhd.Disk(diskImagePath, FileAccess.Read);
+                fileLocator = new FlushTrackingFileLocator(directory);
+                return new DiscUtils.Vhd.Disk(fileLocator, fileName, FileAccess.Read);
             }
             catch (IOException)
             {
                 actualReadOnly = true;
-                return new DiscUtils.Vhd.Disk(diskImagePath, FileAccess.Read);
+                fileLocator = new FlushTrackingFileLocator(directory);
+                return new DiscUtils.Vhd.Disk(fileLocator, fileName, FileAccess.Read);
             }
         }
 

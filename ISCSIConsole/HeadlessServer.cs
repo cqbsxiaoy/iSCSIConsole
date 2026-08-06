@@ -114,9 +114,25 @@ namespace ISCSIConsole
 
                 ISCSITarget target = new ISCSITarget(options.TargetName, disks);
                 AttachTargetDiagnosticLog(target);
+                SingleClientGate singleClientGate = options.SingleClient ? new SingleClientGate() : null;
                 target.OnAuthorizationRequest += delegate(object sender, AuthorizationRequestArgs request)
                 {
-                    request.Accept = true;
+                    if (singleClientGate == null)
+                    {
+                        request.Accept = true;
+                        return;
+                    }
+
+                    bool ownerAssigned;
+                    request.Accept = singleClientGate.Authorize(request, out ownerAssigned);
+                    if (ownerAssigned)
+                    {
+                        Console.WriteLine("SINGLE_CLIENT_LOCKED source={0} initiator={1}", request.InitiatorEndPoint.Address, request.InitiatorName);
+                    }
+                    else if (!request.Accept)
+                    {
+                        Console.Error.WriteLine("SINGLE_CLIENT_REJECTED source={0} owner={1} initiator={2}", request.InitiatorEndPoint.Address, singleClientGate.OwnerAddress, request.InitiatorName);
+                    }
                 };
                 target.OnSessionTermination += delegate(object sender, SessionTerminationArgs request)
                 {
@@ -133,7 +149,7 @@ namespace ISCSIConsole
                 WriteState(statePath, stopFilePath, runtime.PipeName);
 
                 string ready = String.Format(
-                    "READY iqn={0} address={1} port={2} disk=\"{3}\" readonly={4} size={5} bytesPerSector={6} cacheMB={7} pipe={8}",
+                    "READY iqn={0} address={1} port={2} disk=\"{3}\" readonly={4} size={5} bytesPerSector={6} cacheMB={7} singleClient={8} pipe={9}",
                     options.TargetName,
                     options.ListenAddress,
                     options.Port,
@@ -142,6 +158,7 @@ namespace ISCSIConsole
                     diskImage.Size,
                     diskImage.BytesPerSector,
                     GetReadCacheSizeMB(disk),
+                    options.SingleClient,
                     runtime.PipeName);
                 Console.WriteLine(ready);
                 WriteStatus(options.StatusPath, ready);
@@ -883,6 +900,10 @@ namespace ISCSIConsole
                 {
                     options.ReadOnly = true;
                 }
+                else if (IsOption(key, "singleclient"))
+                {
+                    options.SingleClient = true;
+                }
                 else if (IsOption(key, "cachemb"))
                 {
                     string value;
@@ -1513,7 +1534,7 @@ namespace ISCSIConsole
         private static string GetUsage()
         {
             return "Usage:\r\n" +
-                   "  ISCSIConsole.exe <path.vhd|path.vhdx> [target-name] [/listen 0.0.0.0] [/port 3260] [/readonly] [/cachemb 256] [/status <path>] [/stopfile <path>] [/log <path>]\r\n" +
+                   "  ISCSIConsole.exe <path.vhd|path.vhdx> [target-name] [/listen 0.0.0.0] [/port 3260] [/readonly] [/singleclient] [/cachemb 256] [/status <path>] [/stopfile <path>] [/log <path>]\r\n" +
                    "  ISCSIConsole.exe /start [/config <path>] [/listen <ip>] [/port <port>] [/status <path>] [/log <path>]\r\n" +
                    "  ISCSIConsole.exe /stop [/config <path>]\r\n" +
                    "  ISCSIConsole.exe /addtarget <path.vhd|path.vhdx> [target-name] [/config <path>] [/readonly] [/cachemb 256] [/nosave] [/log <path>]\r\n" +
@@ -1543,6 +1564,7 @@ namespace ISCSIConsole
             public bool HasListenAddressOverride;
             public bool HasPortOverride;
             public bool ReadOnly;
+            public bool SingleClient;
             public int CacheSizeMB;
             public bool NoSave;
             public string ConfigPath;
