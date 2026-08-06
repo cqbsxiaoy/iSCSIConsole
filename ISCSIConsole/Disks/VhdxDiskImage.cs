@@ -1,6 +1,7 @@
 #if !NET20
 using System;
 using System.IO;
+using System.Reflection;
 using DiskAccessLibrary;
 using DiscUtils.Streams;
 
@@ -38,7 +39,7 @@ namespace ISCSIConsole
         public static VhdxDiskImage CreateDynamicDisk(string diskImagePath, long size)
         {
             FileStream stream = new FileStream(diskImagePath, FileMode.Create, FileAccess.ReadWrite, FileShare.None);
-            FlushTrackingFileLocator fileLocator = new FlushTrackingFileLocator(Path.GetDirectoryName(Path.GetFullPath(diskImagePath)));
+            FlushTrackingFileLocator fileLocator = new FlushTrackingFileLocator(System.IO.Path.GetDirectoryName(System.IO.Path.GetFullPath(diskImagePath)));
             try
             {
                 fileLocator.Track(stream);
@@ -194,32 +195,54 @@ namespace ISCSIConsole
 
         private static DiscUtils.Vhdx.Disk OpenDisk(string diskImagePath, bool isReadOnly, out bool actualReadOnly, out FlushTrackingFileLocator fileLocator)
         {
-            string directory = Path.GetDirectoryName(Path.GetFullPath(diskImagePath));
-            string fileName = Path.GetFileName(diskImagePath);
+            string directory = System.IO.Path.GetDirectoryName(System.IO.Path.GetFullPath(diskImagePath));
+            string fileName = System.IO.Path.GetFileName(diskImagePath);
             if (isReadOnly)
             {
                 actualReadOnly = true;
                 fileLocator = new FlushTrackingFileLocator(directory);
-                return new DiscUtils.Vhdx.Disk(fileLocator, fileName, FileAccess.Read);
+                return OpenDiskWithLocator(fileLocator, fileName, FileAccess.Read);
             }
 
             try
             {
                 actualReadOnly = false;
                 fileLocator = new FlushTrackingFileLocator(directory);
-                return new DiscUtils.Vhdx.Disk(fileLocator, fileName, FileAccess.ReadWrite);
+                return OpenDiskWithLocator(fileLocator, fileName, FileAccess.ReadWrite);
             }
             catch (UnauthorizedAccessException)
             {
                 actualReadOnly = true;
                 fileLocator = new FlushTrackingFileLocator(directory);
-                return new DiscUtils.Vhdx.Disk(fileLocator, fileName, FileAccess.Read);
+                return OpenDiskWithLocator(fileLocator, fileName, FileAccess.Read);
             }
             catch (IOException)
             {
                 actualReadOnly = true;
                 fileLocator = new FlushTrackingFileLocator(directory);
-                return new DiscUtils.Vhdx.Disk(fileLocator, fileName, FileAccess.Read);
+                return OpenDiskWithLocator(fileLocator, fileName, FileAccess.Read);
+            }
+        }
+
+        private static DiscUtils.Vhdx.Disk OpenDiskWithLocator(DiscUtils.FileLocator fileLocator, string fileName, FileAccess access)
+        {
+            ConstructorInfo constructor = typeof(DiscUtils.Vhdx.Disk).GetConstructor(
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+                null,
+                new Type[] { typeof(DiscUtils.FileLocator), typeof(string), typeof(FileAccess) },
+                null);
+            if (constructor == null)
+            {
+                throw new MissingMethodException("DiscUtils VHDX FileLocator constructor was not found.");
+            }
+
+            try
+            {
+                return (DiscUtils.Vhdx.Disk)constructor.Invoke(new object[] { fileLocator, fileName, access });
+            }
+            catch (TargetInvocationException ex)
+            {
+                throw ex.InnerException ?? ex;
             }
         }
 
