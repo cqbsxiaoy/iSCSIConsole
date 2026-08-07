@@ -15,9 +15,6 @@ namespace ISCSIConsole.Tests
 {
     internal static class Program
     {
-        private const uint VirtualStorageTypeDeviceVhdx = 3;
-        private static readonly Guid VirtualStorageTypeVendorMicrosoft = new Guid("EC984AEC-A0F9-47E9-901F-71415A66345B");
-
         [StructLayout(LayoutKind.Sequential)]
         private struct VirtualStorageType
         {
@@ -26,14 +23,19 @@ namespace ISCSIConsole.Tests
         }
 
         [StructLayout(LayoutKind.Sequential)]
-        private struct CreateVirtualDiskParametersVersion1
+        private struct CreateVirtualDiskParametersVersion2
         {
             public Guid UniqueId;
             public ulong MaximumSize;
             public uint BlockSizeInBytes;
             public uint SectorSizeInBytes;
+            public uint PhysicalSectorSizeInBytes;
             public IntPtr ParentPath;
             public IntPtr SourcePath;
+            public uint OpenFlags;
+            public VirtualStorageType ParentVirtualStorageType;
+            public VirtualStorageType SourceVirtualStorageType;
+            public Guid ResiliencyGuid;
         }
 
         [StructLayout(LayoutKind.Explicit)]
@@ -43,10 +45,10 @@ namespace ISCSIConsole.Tests
             public uint Version;
 
             [FieldOffset(8)]
-            public CreateVirtualDiskParametersVersion1 Version1;
+            public CreateVirtualDiskParametersVersion2 Version2;
         }
 
-        [DllImport("virtdisk.dll", CharSet = CharSet.Unicode)]
+        [DllImport("virtdisk.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
         private static extern uint CreateVirtualDisk(
             ref VirtualStorageType virtualStorageType,
             string path,
@@ -431,15 +433,14 @@ namespace ISCSIConsole.Tests
         private static void CreateDifferencingVhdx(string childPath, string parentPath)
         {
             VirtualStorageType storageType = new VirtualStorageType();
-            storageType.DeviceId = VirtualStorageTypeDeviceVhdx;
-            storageType.VendorId = VirtualStorageTypeVendorMicrosoft;
 
             IntPtr parentPathPointer = Marshal.StringToHGlobalUni(Path.GetFullPath(parentPath));
             try
             {
                 CreateVirtualDiskParameters parameters = new CreateVirtualDiskParameters();
-                parameters.Version = 1;
-                parameters.Version1.ParentPath = parentPathPointer;
+                parameters.Version = 2;
+                parameters.Version2.UniqueId = Guid.NewGuid();
+                parameters.Version2.ParentPath = parentPathPointer;
 
                 SafeFileHandle handle;
                 uint result = CreateVirtualDisk(
@@ -458,7 +459,9 @@ namespace ISCSIConsole.Tests
                 }
                 if (result != 0)
                 {
-                    throw new Win32Exception((int)result, "CreateVirtualDisk failed for the differencing VHDX.");
+                    throw new Win32Exception(
+                        (int)result,
+                        "CreateVirtualDisk failed for the differencing VHDX (" + result + ", 0x" + result.ToString("X8") + ").");
                 }
             }
             finally
