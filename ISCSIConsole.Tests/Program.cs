@@ -1,17 +1,63 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.IO;
 using System.Net;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Threading;
 using DiskAccessLibrary;
 using ISCSI.Server;
+using Microsoft.Win32.SafeHandles;
 using SCSI;
 
 namespace ISCSIConsole.Tests
 {
     internal static class Program
     {
+        private const uint VirtualStorageTypeDeviceVhdx = 3;
+        private static readonly Guid VirtualStorageTypeVendorMicrosoft = new Guid("EC984AEC-A0F9-47E9-901F-71415A66345B");
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct VirtualStorageType
+        {
+            public uint DeviceId;
+            public Guid VendorId;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct CreateVirtualDiskParametersVersion1
+        {
+            public Guid UniqueId;
+            public ulong MaximumSize;
+            public uint BlockSizeInBytes;
+            public uint SectorSizeInBytes;
+            public IntPtr ParentPath;
+            public IntPtr SourcePath;
+        }
+
+        [StructLayout(LayoutKind.Explicit)]
+        private struct CreateVirtualDiskParameters
+        {
+            [FieldOffset(0)]
+            public uint Version;
+
+            [FieldOffset(8)]
+            public CreateVirtualDiskParametersVersion1 Version1;
+        }
+
+        [DllImport("virtdisk.dll", CharSet = CharSet.Unicode)]
+        private static extern uint CreateVirtualDisk(
+            ref VirtualStorageType virtualStorageType,
+            string path,
+            uint virtualDiskAccessMask,
+            IntPtr securityDescriptor,
+            uint flags,
+            uint providerSpecificFlags,
+            ref CreateVirtualDiskParameters parameters,
+            IntPtr overlapped,
+            out SafeFileHandle handle);
+
         private sealed class MemoryDisk : Disk, IFlushableDisk
         {
             private readonly byte[] m_data = new byte[2 * 1024 * 1024];
@@ -327,9 +373,7 @@ namespace ISCSIConsole.Tests
                 parent.ReleaseLock();
                 byte[] parentHashBefore = ComputeHash(parentPath);
 
-                using (DiscUtils.Vhdx.Disk child = DiscUtils.Vhdx.Disk.InitializeDifferencing(childPath, parentPath))
-                {
-                }
+                CreateDifferencingVhdx(childPath, parentPath);
 
                 Console.WriteLine("VHDX_DIFF_STAGE open-writable-child");
                 ISCSIConsole.VhdxDiskImage writableChild = new ISCSIConsole.VhdxDiskImage(childPath, false);
@@ -381,6 +425,45 @@ namespace ISCSIConsole.Tests
             using (FileStream stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read))
             {
                 return sha256.ComputeHash(stream);
+            }
+        }
+
+        private static void CreateDifferencingVhdx(string childPath, string parentPath)
+        {
+            VirtualStorageType storageType = new VirtualStorageType();
+            storageType.DeviceId = VirtualStorageTypeDeviceVhdx;
+            storageType.VendorId = VirtualStorageTypeVendorMicrosoft;
+
+            IntPtr parentPathPointer = Marshal.StringToHGlobalUni(Path.GetFullPath(parentPath));
+            try
+            {
+                CreateVirtualDiskParameters parameters = new CreateVirtualDiskParameters();
+                parameters.Version = 1;
+                parameters.Version1.ParentPath = parentPathPointer;
+
+                SafeFileHandle handle;
+                uint result = CreateVirtualDisk(
+                    ref storageType,
+                    Path.GetFullPath(childPath),
+                    0,
+                    IntPtr.Zero,
+                    0,
+                    0,
+                    ref parameters,
+                    IntPtr.Zero,
+                    out handle);
+                if (handle != null)
+                {
+                    handle.Dispose();
+                }
+                if (result != 0)
+                {
+                    throw new Win32Exception((int)result, "CreateVirtualDisk failed for the differencing VHDX.");
+                }
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(parentPathPointer);
             }
         }
 
