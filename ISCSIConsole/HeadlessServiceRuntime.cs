@@ -14,6 +14,7 @@ namespace ISCSIConsole
     {
         private const int PipeConnectTimeoutMilliseconds = 5000;
         private const int MaximumPipeInstances = 128;
+        private const int MaximumManagementLineBytes = 1024 * 1024;
 
         private class RuntimeTarget
         {
@@ -351,14 +352,9 @@ namespace ISCSIConsole
             {
                 try
                 {
-                    using (StreamReader reader = new StreamReader(pipe, Encoding.UTF8))
-                    using (StreamWriter writer = new StreamWriter(pipe, Encoding.UTF8))
-                    {
-                        writer.AutoFlush = true;
-                        string command = reader.ReadLine();
-                        string response = HandlePipeCommand(command);
-                        writer.WriteLine(response);
-                    }
+                    string command = ReadPipeLine(pipe);
+                    string response = HandlePipeCommand(command);
+                    WritePipeLine(pipe, response);
                 }
                 catch (IOException)
                 {
@@ -490,19 +486,43 @@ namespace ISCSIConsole
             using (NamedPipeClientStream pipe = new NamedPipeClientStream(".", pipeName, PipeDirection.InOut))
             {
                 pipe.Connect(PipeConnectTimeoutMilliseconds);
-                using (StreamWriter writer = new StreamWriter(pipe, Encoding.UTF8))
-                using (StreamReader reader = new StreamReader(pipe, Encoding.UTF8))
+                WritePipeLine(pipe, command);
+                string response = ReadPipeLine(pipe);
+                if (response == null)
                 {
-                    writer.AutoFlush = true;
-                    writer.WriteLine(command);
-                    string response = reader.ReadLine();
-                    if (response == null)
+                    throw new IOException("No response was received from the running service.");
+                }
+                return response;
+            }
+        }
+
+        private static string ReadPipeLine(Stream stream)
+        {
+            using (MemoryStream buffer = new MemoryStream())
+            {
+                while (buffer.Length <= MaximumManagementLineBytes)
+                {
+                    int value = stream.ReadByte();
+                    if (value < 0)
                     {
-                        throw new IOException("No response was received from the running service.");
+                        return buffer.Length == 0 ? null : Encoding.UTF8.GetString(buffer.ToArray()).TrimEnd('\r');
                     }
-                    return response;
+                    if (value == '\n')
+                    {
+                        return Encoding.UTF8.GetString(buffer.ToArray()).TrimEnd('\r');
+                    }
+                    buffer.WriteByte((byte)value);
                 }
             }
+
+            throw new InvalidDataException("Management command exceeds the maximum supported length.");
+        }
+
+        private static void WritePipeLine(Stream stream, string value)
+        {
+            byte[] bytes = Encoding.UTF8.GetBytes((value ?? String.Empty) + "\n");
+            stream.Write(bytes, 0, bytes.Length);
+            stream.Flush();
         }
 
         public static string BuildAddCommand(string targetName, string diskPath, bool readOnly, int cacheSizeMB, bool save, string allowedInitiatorName)
