@@ -17,31 +17,42 @@ namespace Utilities
 
         public void Enqueue(T item)
         {
-            if (m_stopping)
-            {
-                return;
-            }
+            TryEnqueue(item);
+        }
 
+        public bool TryEnqueue(T item)
+        {
             lock (m_queue)
             {
+                if (m_stopping)
+                {
+                    return false;
+                }
+
                 m_queue.Enqueue(item);
                 m_count++;
                 if (m_queue.Count == 1)
                 {
                     Monitor.Pulse(m_queue);
                 }
+                return true;
             }
         }
 
         public void Enqueue(List<T> items)
         {
-            if (m_stopping || items.Count == 0)
+            if (items.Count == 0)
             {
                 return;
             }
 
             lock (m_queue)
             {
+                if (m_stopping)
+                {
+                    return;
+                }
+
                 foreach (T item in items)
                 {
                     m_queue.Enqueue(item);
@@ -101,7 +112,10 @@ namespace Utilities
         {
             get
             {
-                return m_count;
+                lock (m_queue)
+                {
+                    return m_count;
+                }
             }
         }
     }

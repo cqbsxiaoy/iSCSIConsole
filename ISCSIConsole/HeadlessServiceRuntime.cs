@@ -13,6 +13,8 @@ namespace ISCSIConsole
     internal class HeadlessServiceRuntime
     {
         private const int PipeConnectTimeoutMilliseconds = 5000;
+        private const int MaximumPipeInstances = 128;
+        private const int MaximumManagementLineBytes = 1024 * 1024;
 
         private class RuntimeTarget
         {
@@ -22,15 +24,17 @@ namespace ISCSIConsole
         }
 
         private readonly object m_lock = new object();
+        private readonly object m_pipeLock = new object();
         private readonly ISCSIServer m_server;
         private readonly ServiceConfiguration m_configuration;
         private readonly Dictionary<string, RuntimeTarget> m_targets = new Dictionary<string, RuntimeTarget>(StringComparer.InvariantCultureIgnoreCase);
         private readonly string m_configPath;
         private readonly string m_pipeName;
         private readonly ManualResetEvent m_stopRequested = new ManualResetEvent(false);
-        private bool m_stopping;
+        private volatile bool m_stopping;
         private bool m_serverStopQueued;
         private Thread m_pipeThread;
+        private NamedPipeServerStream m_listeningPipe;
 
         public HeadlessServiceRuntime(ISCSIServer server, ServiceConfiguration configuration, string configPath)
         {
@@ -82,12 +86,17 @@ namespace ISCSIConsole
         public void Stop()
         {
             m_stopping = true;
-            WakePipeServer();
+            CloseListeningPipe();
+            if (m_pipeThread != null && Thread.CurrentThread != m_pipeThread)
+            {
+                m_pipeThread.Join(2000);
+            }
 
             lock (m_lock)
             {
                 foreach (RuntimeTarget runtimeTarget in m_targets.Values)
                 {
+                    runtimeTarget.Target.Stop();
                     LockUtils.ReleaseDisks(runtimeTarget.Disks);
                 }
                 m_targets.Clear();
@@ -103,13 +112,18 @@ namespace ISCSIConsole
             targetConfiguration.Normalize();
 
             List<Disk> disks = new List<Disk>();
+            ISCSITarget target = null;
             bool addedToConfiguration = false;
             bool addedToServer = false;
             try
             {
-                ISCSITarget target = HeadlessServer.CreateTarget(targetConfiguration, disks);
+                target = HeadlessServer.CreateTarget(targetConfiguration, disks);
                 lock (m_lock)
                 {
+                    if (m_stopping)
+                    {
+                        throw new InvalidOperationException("The service is stopping and cannot add another target.");
+                    }
                     if (m_targets.ContainsKey(targetConfiguration.TargetName))
                     {
                         throw new InvalidOperationException("Target already exists: " + targetConfiguration.TargetName);
@@ -146,6 +160,10 @@ namespace ISCSIConsole
                     {
                     }
                 }
+                else if (target != null)
+                {
+                    target.Stop();
+                }
                 if (addedToConfiguration)
                 {
                     RemoveTargetConfiguration(targetConfiguration.TargetName);
@@ -167,7 +185,7 @@ namespace ISCSIConsole
             return "OK ADDED target=" + targetConfiguration.TargetName;
         }
 
-        private string RemoveTarget(string targetName, bool save)
+        private string RemoveTarget(string targetName, bool save, bool force)
         {
             targetName = HeadlessServer.BuildTargetName(targetName);
             lock (m_lock)
@@ -178,6 +196,10 @@ namespace ISCSIConsole
                     return "ERROR Target was not found: " + targetName;
                 }
 
+                if (force)
+                {
+                    m_server.ResetTarget(targetName);
+                }
                 bool removed = m_server.RemoveTarget(targetName);
                 if (!removed)
                 {
@@ -205,6 +227,11 @@ namespace ISCSIConsole
                 {
                     builder.Append(" | ");
                     builder.Append(runtimeTarget.Configuration.TargetName);
+                    if (!String.IsNullOrEmpty(runtimeTarget.Configuration.AllowedInitiatorName))
+                    {
+                        builder.Append(" initiator=");
+                        builder.Append(runtimeTarget.Configuration.AllowedInitiatorName);
+                    }
                     foreach (DiskConfiguration disk in runtimeTarget.Configuration.Disks)
                     {
                         if (disk.Type == DiskConfiguration.TypeDiskImage)
@@ -212,6 +239,8 @@ namespace ISCSIConsole
                             builder.Append(" disk=\"");
                             builder.Append(disk.Path);
                             builder.Append("\"");
+                            builder.Append(" cacheMB=");
+                            builder.Append(disk.CacheSizeMB);
                         }
                         else if (disk.Type == DiskConfiguration.TypePhysicalDisk)
                         {
@@ -266,20 +295,29 @@ namespace ISCSIConsole
         {
             while (!m_stopping)
             {
+                NamedPipeServerStream pipe = null;
                 try
                 {
-                    using (NamedPipeServerStream pipe = new NamedPipeServerStream(m_pipeName, PipeDirection.InOut, 4, PipeTransmissionMode.Byte))
+                    pipe = new NamedPipeServerStream(m_pipeName, PipeDirection.InOut, MaximumPipeInstances, PipeTransmissionMode.Byte);
+                    lock (m_pipeLock)
                     {
-                        pipe.WaitForConnection();
-                        using (StreamReader reader = new StreamReader(pipe, Encoding.UTF8))
-                        using (StreamWriter writer = new StreamWriter(pipe, Encoding.UTF8))
+                        if (m_stopping)
                         {
-                            writer.AutoFlush = true;
-                            string command = reader.ReadLine();
-                            string response = HandlePipeCommand(command);
-                            writer.WriteLine(response);
+                            return;
+                        }
+                        m_listeningPipe = pipe;
+                    }
+                    pipe.WaitForConnection();
+                    lock (m_pipeLock)
+                    {
+                        if (Object.ReferenceEquals(m_listeningPipe, pipe))
+                        {
+                            m_listeningPipe = null;
                         }
                     }
+                    NamedPipeServerStream connectedPipe = pipe;
+                    pipe = null;
+                    ThreadPool.QueueUserWorkItem(HandlePipeClient, connectedPipe);
                 }
                 catch (IOException)
                 {
@@ -290,6 +328,43 @@ namespace ISCSIConsole
                 catch (Exception ex)
                 {
                     Console.Error.WriteLine("WARNING: Management pipe error: " + ex.Message);
+                }
+                finally
+                {
+                    lock (m_pipeLock)
+                    {
+                        if (Object.ReferenceEquals(m_listeningPipe, pipe))
+                        {
+                            m_listeningPipe = null;
+                        }
+                    }
+                    if (pipe != null)
+                    {
+                        pipe.Dispose();
+                    }
+                }
+            }
+        }
+
+        private void HandlePipeClient(object state)
+        {
+            using (NamedPipeServerStream pipe = (NamedPipeServerStream)state)
+            {
+                try
+                {
+                    string command = ReadPipeLine(pipe);
+                    string response = HandlePipeCommand(command);
+                    WritePipeLine(pipe, response);
+                }
+                catch (IOException)
+                {
+                }
+                catch (ObjectDisposedException)
+                {
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine("WARNING: Management client error: " + ex.Message);
                 }
             }
         }
@@ -317,8 +392,10 @@ namespace ISCSIConsole
                     bool readOnly = parts[3] == "1";
                     int cacheSizeMB = Convert.ToInt32(parts[4]);
                     bool save = parts[5] == "1";
+                    string allowedInitiatorName = parts.Length >= 7 ? Decode(parts[6]) : String.Empty;
                     TargetConfiguration targetConfiguration = new TargetConfiguration();
                     targetConfiguration.TargetName = HeadlessServer.BuildTargetName(targetName);
+                    targetConfiguration.AllowedInitiatorName = allowedInitiatorName;
                     targetConfiguration.Disks.Add(DiskConfiguration.CreateDiskImage(diskPath, readOnly, cacheSizeMB));
                     return AddTarget(targetConfiguration, save);
                 }
@@ -328,7 +405,8 @@ namespace ISCSIConsole
                     {
                         return "ERROR Invalid REMOVE command";
                     }
-                    return RemoveTarget(Decode(parts[1]), parts[2] == "1");
+                    bool force = parts.Length >= 4 && parts[3] == "1";
+                    return RemoveTarget(Decode(parts[1]), parts[2] == "1", force);
                 }
                 if (verb == "LIST")
                 {
@@ -342,6 +420,7 @@ namespace ISCSIConsole
                 {
                     m_stopRequested.Set();
                     m_stopping = true;
+                    CloseListeningPipe();
                     QueueServerStop();
                     return "OK STOPPING";
                 }
@@ -354,21 +433,21 @@ namespace ISCSIConsole
             }
         }
 
-        private void WakePipeServer()
+        private void CloseListeningPipe()
         {
-            try
+            lock (m_pipeLock)
             {
-                using (NamedPipeClientStream pipe = new NamedPipeClientStream(".", m_pipeName, PipeDirection.InOut))
+                if (m_listeningPipe != null)
                 {
-                    pipe.Connect(250);
-                    using (StreamWriter writer = new StreamWriter(pipe, Encoding.UTF8))
+                    try
                     {
-                        writer.WriteLine("LIST");
+                        m_listeningPipe.Dispose();
                     }
+                    catch
+                    {
+                    }
+                    m_listeningPipe = null;
                 }
-            }
-            catch
-            {
             }
         }
 
@@ -407,29 +486,53 @@ namespace ISCSIConsole
             using (NamedPipeClientStream pipe = new NamedPipeClientStream(".", pipeName, PipeDirection.InOut))
             {
                 pipe.Connect(PipeConnectTimeoutMilliseconds);
-                using (StreamWriter writer = new StreamWriter(pipe, Encoding.UTF8))
-                using (StreamReader reader = new StreamReader(pipe, Encoding.UTF8))
+                WritePipeLine(pipe, command);
+                string response = ReadPipeLine(pipe);
+                if (response == null)
                 {
-                    writer.AutoFlush = true;
-                    writer.WriteLine(command);
-                    string response = reader.ReadLine();
-                    if (response == null)
-                    {
-                        throw new IOException("No response was received from the running service.");
-                    }
-                    return response;
+                    throw new IOException("No response was received from the running service.");
                 }
+                return response;
             }
         }
 
-        public static string BuildAddCommand(string targetName, string diskPath, bool readOnly, int cacheSizeMB, bool save)
+        private static string ReadPipeLine(Stream stream)
         {
-            return "ADD|" + Encode(targetName) + "|" + Encode(diskPath) + "|" + (readOnly ? "1" : "0") + "|" + cacheSizeMB + "|" + (save ? "1" : "0");
+            using (MemoryStream buffer = new MemoryStream())
+            {
+                while (buffer.Length <= MaximumManagementLineBytes)
+                {
+                    int value = stream.ReadByte();
+                    if (value < 0)
+                    {
+                        return buffer.Length == 0 ? null : Encoding.UTF8.GetString(buffer.ToArray()).TrimEnd('\r');
+                    }
+                    if (value == '\n')
+                    {
+                        return Encoding.UTF8.GetString(buffer.ToArray()).TrimEnd('\r');
+                    }
+                    buffer.WriteByte((byte)value);
+                }
+            }
+
+            throw new InvalidDataException("Management command exceeds the maximum supported length.");
         }
 
-        public static string BuildRemoveCommand(string targetName, bool save)
+        private static void WritePipeLine(Stream stream, string value)
         {
-            return "REMOVE|" + Encode(targetName) + "|" + (save ? "1" : "0");
+            byte[] bytes = Encoding.UTF8.GetBytes((value ?? String.Empty) + "\n");
+            stream.Write(bytes, 0, bytes.Length);
+            stream.Flush();
+        }
+
+        public static string BuildAddCommand(string targetName, string diskPath, bool readOnly, int cacheSizeMB, bool save, string allowedInitiatorName)
+        {
+            return "ADD|" + Encode(targetName) + "|" + Encode(diskPath) + "|" + (readOnly ? "1" : "0") + "|" + cacheSizeMB + "|" + (save ? "1" : "0") + "|" + Encode(allowedInitiatorName);
+        }
+
+        public static string BuildRemoveCommand(string targetName, bool save, bool force)
+        {
+            return "REMOVE|" + Encode(targetName) + "|" + (save ? "1" : "0") + "|" + (force ? "1" : "0");
         }
 
         private static string Encode(string value)

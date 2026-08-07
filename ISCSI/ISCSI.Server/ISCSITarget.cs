@@ -13,7 +13,7 @@ using Utilities;
 
 namespace ISCSI.Server
 {
-    public class ISCSITarget : SCSITargetInterface
+    public class ISCSITarget : SCSITargetInterface, IStoppableSCSITarget
     {
         private string m_targetName; // ISCSI name
         private SCSITargetInterface m_target;
@@ -47,6 +47,15 @@ namespace ISCSI.Server
         public SCSIStatusCodeName ExecuteCommand(byte[] commandBytes, LUNStructure lun, byte[] data, out byte[] response)
         {
             return m_target.ExecuteCommand(commandBytes, lun, data, out response);
+        }
+
+        public void Stop()
+        {
+            IStoppableSCSITarget stoppableTarget = m_target as IStoppableSCSITarget;
+            if (stoppableTarget != null)
+            {
+                stoppableTarget.Stop();
+            }
         }
 
         public void Target_OnStandardInquiry(object sender, StandardInquiryEventArgs args)

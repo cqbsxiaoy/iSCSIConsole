@@ -102,6 +102,7 @@ namespace ISCSIConsole
         {
             ISCSIServer server = null;
             List<Disk> disks = null;
+            ISCSITarget target = null;
             HeadlessServiceRuntime runtime = null;
             string statePath = GetStatePath(options.ConfigPath);
             string stopFilePath = String.IsNullOrEmpty(options.StopFilePath) ? GetDefaultStopFilePath(options.ConfigPath) : options.StopFilePath;
@@ -112,7 +113,7 @@ namespace ISCSIConsole
                 disks = new List<Disk>();
                 disks.Add(disk);
 
-                ISCSITarget target = new ISCSITarget(options.TargetName, disks);
+                target = new ISCSITarget(options.TargetName, disks);
                 AttachTargetDiagnosticLog(target);
                 SingleClientGate singleClientGate = options.SingleClient ? new SingleClientGate() : null;
                 target.OnAuthorizationRequest += delegate(object sender, AuthorizationRequestArgs request)
@@ -180,7 +181,7 @@ namespace ISCSIConsole
                 {
                     runtime.Stop();
                 }
-                StopAndRelease(server, disks);
+                StopAndRelease(server, target, disks);
             }
         }
 
@@ -252,11 +253,11 @@ namespace ISCSIConsole
                 DeleteFileIfExists(stopFilePath);
                 if (runtime != null)
                 {
-                    StopAndRelease(server, null);
+                    StopAndRelease(server, null, null);
                     server = null;
                     runtime.Stop();
                 }
-                StopAndRelease(server, null);
+                StopAndRelease(server, null, null);
             }
         }
 
@@ -315,12 +316,18 @@ namespace ISCSIConsole
             {
                 throw new InvalidDataException("Invalid target IQN in configuration: " + targetConfiguration.TargetName);
             }
+            if (!String.IsNullOrEmpty(targetConfiguration.AllowedInitiatorName) &&
+                !ISCSINameHelper.IsValidISCSIName(targetConfiguration.AllowedInitiatorName))
+            {
+                throw new InvalidDataException("Invalid allowed initiator name for target " + targetConfiguration.TargetName + ": " + targetConfiguration.AllowedInitiatorName);
+            }
             if (targetConfiguration.Disks == null || targetConfiguration.Disks.Count == 0)
             {
                 throw new InvalidDataException("Target has no disk: " + targetConfiguration.TargetName);
             }
 
             List<Disk> disks = new List<Disk>();
+            ISCSITarget target = null;
             try
             {
                 foreach (DiskConfiguration diskConfiguration in targetConfiguration.Disks)
@@ -329,10 +336,20 @@ namespace ISCSIConsole
                     disks.Add(disk);
                 }
 
-                ISCSITarget target = new ISCSITarget(targetConfiguration.TargetName, disks);
+                target = new ISCSITarget(targetConfiguration.TargetName, disks);
+                InitiatorNameGate initiatorGate = String.IsNullOrEmpty(targetConfiguration.AllowedInitiatorName) ? null : new InitiatorNameGate(targetConfiguration.AllowedInitiatorName);
                 target.OnAuthorizationRequest += delegate(object sender, AuthorizationRequestArgs request)
                 {
-                    request.Accept = true;
+                    request.Accept = initiatorGate == null || initiatorGate.Authorize(request);
+                    if (!request.Accept)
+                    {
+                        Console.Error.WriteLine(
+                            "INITIATOR_REJECTED target={0} initiator={1} expected={2} source={3}",
+                            targetConfiguration.TargetName,
+                            request.InitiatorName,
+                            initiatorGate.AllowedInitiatorName,
+                            request.InitiatorEndPoint);
+                    }
                 };
                 target.OnSessionTermination += delegate(object sender, SessionTerminationArgs request)
                 {
@@ -347,6 +364,10 @@ namespace ISCSIConsole
             }
             catch
             {
+                if (target != null)
+                {
+                    target.Stop();
+                }
                 LockUtils.ReleaseDisks(disks);
                 throw;
             }
@@ -428,7 +449,7 @@ namespace ISCSIConsole
             try
             {
                 string pipeName = ReadStatePipeName(GetStatePath(options.ConfigPath));
-                string command = HeadlessServiceRuntime.BuildAddCommand(options.TargetName, options.DiskPath, options.ReadOnly, options.CacheSizeMB, !options.NoSave);
+                string command = HeadlessServiceRuntime.BuildAddCommand(options.TargetName, options.DiskPath, options.ReadOnly, options.CacheSizeMB, !options.NoSave, options.AllowedInitiatorName);
                 string response = HeadlessServiceRuntime.SendManagementCommand(pipeName, command);
                 Console.WriteLine(response);
                 WriteStatus(options.StatusPath, response);
@@ -452,7 +473,7 @@ namespace ISCSIConsole
             try
             {
                 string pipeName = ReadStatePipeName(GetStatePath(options.ConfigPath));
-                string command = HeadlessServiceRuntime.BuildRemoveCommand(options.TargetName, !options.NoSave);
+                string command = HeadlessServiceRuntime.BuildRemoveCommand(options.TargetName, !options.NoSave, options.Force);
                 string response = HeadlessServiceRuntime.SendManagementCommand(pipeName, command);
                 Console.WriteLine(response);
                 WriteStatus(options.StatusPath, response);
@@ -559,13 +580,24 @@ namespace ISCSIConsole
             return WindowsVolumeHelper.GetVolumeByGuid(volumeGuid);
         }
 
-        private static void StopAndRelease(ISCSIServer server, List<Disk> disks)
+        private static void StopAndRelease(ISCSIServer server, ISCSITarget target, List<Disk> disks)
         {
             if (server != null)
             {
                 try
                 {
                     server.Stop();
+                }
+                catch
+                {
+                }
+            }
+
+            if (target != null)
+            {
+                try
+                {
+                    target.Stop();
                 }
                 catch
                 {
@@ -1074,7 +1106,7 @@ namespace ISCSIConsole
         private static bool TryParseAddTargetOptions(string[] args, int index, ServeOptions options, out string error)
         {
             error = null;
-            options.CacheSizeMB = CachedDisk.DefaultCacheSizeMB;
+            options.CacheSizeMB = DiskConfiguration.DefaultServiceCacheSizeMB;
 
             if (index < args.Length && !IsOption(args[index]))
             {
@@ -1115,6 +1147,13 @@ namespace ISCSIConsole
                 else if (IsOption(key, "readonly"))
                 {
                     options.ReadOnly = true;
+                }
+                else if (IsOption(key, "initiator"))
+                {
+                    if (!TryReadValue(args, ref index, out options.AllowedInitiatorName, out error))
+                    {
+                        return false;
+                    }
                 }
                 else if (IsOption(key, "cachemb"))
                 {
@@ -1180,6 +1219,15 @@ namespace ISCSIConsole
                 error = "Only VHD and VHDX disk images are supported by /addtarget.";
                 return false;
             }
+            if (!String.IsNullOrEmpty(options.AllowedInitiatorName))
+            {
+                options.AllowedInitiatorName = options.AllowedInitiatorName.Trim();
+                if (!ISCSINameHelper.IsValidISCSIName(options.AllowedInitiatorName))
+                {
+                    error = "Invalid initiator name: " + options.AllowedInitiatorName;
+                    return false;
+                }
+            }
 
             return true;
         }
@@ -1215,6 +1263,10 @@ namespace ISCSIConsole
                 else if (IsOption(key, "nosave"))
                 {
                     options.NoSave = true;
+                }
+                else if (IsOption(key, "force"))
+                {
+                    options.Force = true;
                 }
                 else if (IsOption(key, "status"))
                 {
@@ -1537,8 +1589,8 @@ namespace ISCSIConsole
                    "  ISCSIConsole.exe <path.vhd|path.vhdx> [target-name] [/listen 0.0.0.0] [/port 3260] [/readonly] [/singleclient] [/cachemb 256] [/status <path>] [/stopfile <path>] [/log <path>]\r\n" +
                    "  ISCSIConsole.exe /start [/config <path>] [/listen <ip>] [/port <port>] [/status <path>] [/log <path>]\r\n" +
                    "  ISCSIConsole.exe /stop [/config <path>]\r\n" +
-                   "  ISCSIConsole.exe /addtarget <path.vhd|path.vhdx> [target-name] [/config <path>] [/readonly] [/cachemb 256] [/nosave] [/log <path>]\r\n" +
-                   "  ISCSIConsole.exe /removetarget <target-name> [/config <path>] [/nosave]\r\n" +
+                   "  ISCSIConsole.exe /addtarget <path.vhd|path.vhdx> [target-name] [/config <path>] [/initiator <iqn>] [/readonly] [/cachemb 16] [/nosave] [/log <path>]\r\n" +
+                   "  ISCSIConsole.exe /removetarget <target-name> [/config <path>] [/force] [/nosave]\r\n" +
                    "  ISCSIConsole.exe /list [/config <path>]\r\n" +
                    "  ISCSIConsole.exe /save [/config <path>]";
         }
@@ -1559,6 +1611,7 @@ namespace ISCSIConsole
             public ServeMode Mode;
             public string DiskPath;
             public string TargetName;
+            public string AllowedInitiatorName;
             public IPAddress ListenAddress;
             public int Port;
             public bool HasListenAddressOverride;
@@ -1567,6 +1620,7 @@ namespace ISCSIConsole
             public bool SingleClient;
             public int CacheSizeMB;
             public bool NoSave;
+            public bool Force;
             public string ConfigPath;
             public string StatusPath;
             public string StopFilePath;

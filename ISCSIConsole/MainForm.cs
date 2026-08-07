@@ -142,6 +142,7 @@ namespace ISCSIConsole
                 catch (ArgumentException ex)
                 {
                     MessageBox.Show(ex.Message, "错误");
+                    target.Stop();
                     LockUtils.ReleaseDisks(((SCSI.VirtualSCSITarget)target.SCSITarget).Disks);
                     return;
                 }

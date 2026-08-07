@@ -24,4 +24,9 @@ namespace SCSI
 
         SCSIStatusCodeName ExecuteCommand(byte[] commandBytes, LUNStructure lun, byte[] data, out byte[] response);
     }
+
+    public interface IStoppableSCSITarget
+    {
+        void Stop();
+    }
 }
