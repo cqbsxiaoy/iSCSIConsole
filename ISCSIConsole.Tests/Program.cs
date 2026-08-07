@@ -68,7 +68,28 @@ namespace ISCSIConsole.Tests
         private static void RunTest(string name, Action test)
         {
             Console.WriteLine("TEST_START " + name);
-            test();
+            Exception failure = null;
+            Thread testThread = new Thread(delegate()
+            {
+                try
+                {
+                    test();
+                }
+                catch (Exception ex)
+                {
+                    failure = ex;
+                }
+            });
+            testThread.IsBackground = true;
+            testThread.Start();
+            if (!testThread.Join(30000))
+            {
+                throw new TimeoutException("Test exceeded 30 seconds: " + name);
+            }
+            if (failure != null)
+            {
+                throw new InvalidOperationException("Test failed: " + name, failure);
+            }
             Console.WriteLine("TEST_PASSED " + name);
         }
 
