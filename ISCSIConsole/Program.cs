@@ -39,6 +39,14 @@ namespace ISCSIConsole
             {
                 if (args[0] == "/help")
                 {
+                    StringBuilder builder = new StringBuilder();
+                    builder.AppendLine("命令行参数:");
+                    builder.AppendLine("/log - 将日志文件写入可执行文件所在目录");
+#if !NET20
+                    builder.AppendLine("/serve /help - 显示无界面服务参数");
+#endif
+                    MessageBox.Show(builder.ToString(), "帮助");
+                    return;
                 }
                 if (args[0] == "/log")
                 {
