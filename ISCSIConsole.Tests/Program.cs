@@ -44,17 +44,17 @@ namespace ISCSIConsole.Tests
         {
             try
             {
-                TestCmdSNOrdering();
-                TestCdb12Serialization();
-                TestScsiFlushAndFua();
-                TestReadWrite12AndCacheInvalidation();
-                TestSingleClientGate();
-                TestInitiatorNameGate();
-                TestTargetWorkerLifecycle();
-                TestClassroomCacheBudget();
-                TestConcurrentManagementPipe();
-                TestVhdxDurableFlush();
-                TestVhdxDifferencingWritesOnlyChild();
+                RunTest("CmdSN ordering", TestCmdSNOrdering);
+                RunTest("CDB12 serialization", TestCdb12Serialization);
+                RunTest("SCSI flush and FUA", TestScsiFlushAndFua);
+                RunTest("READ/WRITE12 and cache", TestReadWrite12AndCacheInvalidation);
+                RunTest("single-client gate", TestSingleClientGate);
+                RunTest("initiator-name gate", TestInitiatorNameGate);
+                RunTest("80-target worker lifecycle", TestTargetWorkerLifecycle);
+                RunTest("classroom cache budget", TestClassroomCacheBudget);
+                RunTest("concurrent management pipe", TestConcurrentManagementPipe);
+                RunTest("VHDX durable flush", TestVhdxDurableFlush);
+                RunTest("VHDX child-only writes", TestVhdxDifferencingWritesOnlyChild);
                 Console.WriteLine("ALL_TESTS_PASSED");
                 return 0;
             }
@@ -63,6 +63,13 @@ namespace ISCSIConsole.Tests
                 Console.Error.WriteLine("TEST_FAILED: " + ex);
                 return 1;
             }
+        }
+
+        private static void RunTest(string name, Action test)
+        {
+            Console.WriteLine("TEST_START " + name);
+            test();
+            Console.WriteLine("TEST_PASSED " + name);
         }
 
         private static void TestCmdSNOrdering()
@@ -209,6 +216,7 @@ namespace ISCSIConsole.Tests
                 runtime.StartManagementPipe();
                 Exception[] errors = new Exception[32];
                 Thread[] clients = new Thread[32];
+                CountdownEvent completed = new CountdownEvent(clients.Length);
                 for (int index = 0; index < clients.Length; index++)
                 {
                     int clientIndex = index;
@@ -226,15 +234,16 @@ namespace ISCSIConsole.Tests
                         {
                             errors[clientIndex] = ex;
                         }
+                        finally
+                        {
+                            completed.Signal();
+                        }
                     });
                     clients[index].IsBackground = true;
                     clients[index].Start();
                 }
 
-                foreach (Thread client in clients)
-                {
-                    Assert(client.Join(15000), "concurrent management client completes");
-                }
+                Assert(completed.Wait(15000), "all concurrent management clients complete within 15 seconds");
                 foreach (Exception error in errors)
                 {
                     if (error != null)
