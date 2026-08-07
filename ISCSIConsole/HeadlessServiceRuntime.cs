@@ -23,6 +23,7 @@ namespace ISCSIConsole
         }
 
         private readonly object m_lock = new object();
+        private readonly object m_pipeLock = new object();
         private readonly ISCSIServer m_server;
         private readonly ServiceConfiguration m_configuration;
         private readonly Dictionary<string, RuntimeTarget> m_targets = new Dictionary<string, RuntimeTarget>(StringComparer.InvariantCultureIgnoreCase);
@@ -32,6 +33,7 @@ namespace ISCSIConsole
         private volatile bool m_stopping;
         private bool m_serverStopQueued;
         private Thread m_pipeThread;
+        private NamedPipeServerStream m_listeningPipe;
 
         public HeadlessServiceRuntime(ISCSIServer server, ServiceConfiguration configuration, string configPath)
         {
@@ -83,7 +85,11 @@ namespace ISCSIConsole
         public void Stop()
         {
             m_stopping = true;
-            WakePipeServer();
+            CloseListeningPipe();
+            if (m_pipeThread != null && Thread.CurrentThread != m_pipeThread)
+            {
+                m_pipeThread.Join(2000);
+            }
 
             lock (m_lock)
             {
@@ -292,7 +298,22 @@ namespace ISCSIConsole
                 try
                 {
                     pipe = new NamedPipeServerStream(m_pipeName, PipeDirection.InOut, MaximumPipeInstances, PipeTransmissionMode.Byte);
+                    lock (m_pipeLock)
+                    {
+                        if (m_stopping)
+                        {
+                            return;
+                        }
+                        m_listeningPipe = pipe;
+                    }
                     pipe.WaitForConnection();
+                    lock (m_pipeLock)
+                    {
+                        if (Object.ReferenceEquals(m_listeningPipe, pipe))
+                        {
+                            m_listeningPipe = null;
+                        }
+                    }
                     NamedPipeServerStream connectedPipe = pipe;
                     pipe = null;
                     ThreadPool.QueueUserWorkItem(HandlePipeClient, connectedPipe);
@@ -309,6 +330,13 @@ namespace ISCSIConsole
                 }
                 finally
                 {
+                    lock (m_pipeLock)
+                    {
+                        if (Object.ReferenceEquals(m_listeningPipe, pipe))
+                        {
+                            m_listeningPipe = null;
+                        }
+                    }
                     if (pipe != null)
                     {
                         pipe.Dispose();
@@ -396,6 +424,7 @@ namespace ISCSIConsole
                 {
                     m_stopRequested.Set();
                     m_stopping = true;
+                    CloseListeningPipe();
                     QueueServerStop();
                     return "OK STOPPING";
                 }
@@ -408,21 +437,21 @@ namespace ISCSIConsole
             }
         }
 
-        private void WakePipeServer()
+        private void CloseListeningPipe()
         {
-            try
+            lock (m_pipeLock)
             {
-                using (NamedPipeClientStream pipe = new NamedPipeClientStream(".", m_pipeName, PipeDirection.InOut))
+                if (m_listeningPipe != null)
                 {
-                    pipe.Connect(250);
-                    using (StreamWriter writer = new StreamWriter(pipe, Encoding.UTF8))
+                    try
                     {
-                        writer.WriteLine("LIST");
+                        m_listeningPipe.Dispose();
                     }
+                    catch
+                    {
+                    }
+                    m_listeningPipe = null;
                 }
-            }
-            catch
-            {
             }
         }
 
