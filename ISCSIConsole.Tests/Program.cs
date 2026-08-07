@@ -318,6 +318,7 @@ namespace ISCSIConsole.Tests
             string parentPath = Path.Combine(directory, "parent.vhdx");
             string childPath = Path.Combine(directory, "child.vhdx");
             Directory.CreateDirectory(directory);
+            Exception testFailure = null;
             try
             {
                 ISCSIConsole.VhdxDiskImage parent = ISCSIConsole.VhdxDiskImage.CreateDynamicDisk(parentPath, 64L * 1024 * 1024);
@@ -330,12 +331,14 @@ namespace ISCSIConsole.Tests
                 {
                 }
 
+                Console.WriteLine("VHDX_DIFF_STAGE open-writable-child");
                 ISCSIConsole.VhdxDiskImage writableChild = new ISCSIConsole.VhdxDiskImage(childPath, false);
                 Assert(writableChild.ReadSectors(2048, 1)[0] == 0x31, "child reads unchanged sectors from parent");
                 writableChild.WriteSectors(2048, FilledSector(0x72));
                 writableChild.Flush();
                 writableChild.ReleaseLock();
 
+                Console.WriteLine("VHDX_DIFF_STAGE hash-parent");
                 byte[] parentHashAfter = ComputeHash(parentPath);
                 Assert(ByteArraysEqual(parentHashBefore, parentHashAfter), "child write does not modify parent VHDX bytes");
 
@@ -347,11 +350,27 @@ namespace ISCSIConsole.Tests
                 Assert(reopenedParent.ReadSectors(2048, 1)[0] == 0x31, "parent logical content remains unchanged");
                 reopenedParent.ReleaseLock();
             }
+            catch (Exception ex)
+            {
+                testFailure = ex;
+                throw;
+            }
             finally
             {
                 if (Directory.Exists(directory))
                 {
-                    Directory.Delete(directory, true);
+                    try
+                    {
+                        Directory.Delete(directory, true);
+                    }
+                    catch (Exception cleanupFailure)
+                    {
+                        if (testFailure == null)
+                        {
+                            throw;
+                        }
+                        Console.Error.WriteLine("VHDX_DIFF_CLEANUP_FAILED: " + cleanupFailure);
+                    }
                 }
             }
         }
