@@ -97,11 +97,16 @@ namespace ISCSIConsole
         [XmlAttribute]
         public string TargetName { get; set; }
 
+        [XmlAttribute]
+        public string AllowedInitiatorName { get; set; }
+
         [XmlArrayItem("Disk")]
         public List<DiskConfiguration> Disks { get; set; }
 
         public void Normalize()
         {
+            TargetName = (TargetName ?? String.Empty).Trim();
+            AllowedInitiatorName = (AllowedInitiatorName ?? String.Empty).Trim();
             if (Disks == null)
             {
                 Disks = new List<DiskConfiguration>();
@@ -118,13 +123,14 @@ namespace ISCSIConsole
 
     public class DiskConfiguration
     {
+        public const int DefaultServiceCacheSizeMB = 16;
         public const string TypeDiskImage = "DiskImage";
         public const string TypePhysicalDisk = "PhysicalDisk";
         public const string TypeVolume = "Volume";
 
         public DiskConfiguration()
         {
-            CacheSizeMB = CachedDisk.DefaultCacheSizeMB;
+            CacheSizeMB = DefaultServiceCacheSizeMB;
         }
 
         [XmlAttribute]
@@ -163,7 +169,7 @@ namespace ISCSIConsole
 
         public static DiskConfiguration CreateDiskImage(string path, bool readOnly)
         {
-            return CreateDiskImage(path, readOnly, CachedDisk.DefaultCacheSizeMB);
+            return CreateDiskImage(path, readOnly, DefaultServiceCacheSizeMB);
         }
 
         public static DiskConfiguration CreateDiskImage(string path, bool readOnly, int cacheSizeMB)

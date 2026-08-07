@@ -60,16 +60,28 @@ namespace ISCSI.Server
 
         public bool RemoveTarget(string targetName)
         {
+            ISCSITarget removedTarget = null;
             // We use m_targets.Lock to synchronize between the login logic and the target removal logic.
             // We must obtain the lock before calling IsTargetInUse() to prevent a successful login to a target followed by its removal.
             lock (m_targets.Lock)
             {
                 if (!m_sessionManager.IsTargetInUse(targetName))
                 {
-                    return m_targets.RemoveTarget(targetName);
+                    removedTarget = m_targets.FindTarget(targetName);
+                    if (removedTarget != null)
+                    {
+                        m_targets.RemoveTarget(targetName);
+                    }
                 }
             }
-            return false;
+
+            if (removedTarget == null)
+            {
+                return false;
+            }
+
+            removedTarget.Stop();
+            return true;
         }
 
         /// <exception cref="System.Net.Sockets.SocketException"></exception>

@@ -12,7 +12,7 @@ using Utilities;
 
 namespace SCSI
 {
-    public abstract class SCSITarget : SCSITargetInterface
+    public abstract class SCSITarget : SCSITargetInterface, IStoppableSCSITarget
     {
         private class SCSICommand
         {
@@ -23,7 +23,9 @@ namespace SCSI
             public OnCommandCompleted OnCommandCompleted;
         }
 
-        private BlockingQueue<SCSICommand> m_commandQueue = new BlockingQueue<SCSICommand>();
+        private static int s_activeWorkerCount;
+        private readonly BlockingQueue<SCSICommand> m_commandQueue = new BlockingQueue<SCSICommand>();
+        private readonly Thread m_workerThread;
 
         public event EventHandler<StandardInquiryEventArgs> OnStandardInquiry;
 
@@ -33,25 +35,57 @@ namespace SCSI
 
         public SCSITarget()
         {
-            Thread workerThread = new Thread(ProcessCommandQueue);
-            workerThread.IsBackground = true;
-            workerThread.Start();
+            m_workerThread = new Thread(ProcessCommandQueue);
+            m_workerThread.IsBackground = true;
+            Interlocked.Increment(ref s_activeWorkerCount);
+            try
+            {
+                m_workerThread.Start();
+            }
+            catch
+            {
+                Interlocked.Decrement(ref s_activeWorkerCount);
+                throw;
+            }
         }
 
         private void ProcessCommandQueue()
         {
-            while (true)
+            try
             {
-                SCSICommand command;
-                bool stopping = !m_commandQueue.TryDequeue(out command);
-                if (stopping)
+                while (true)
                 {
-                    return;
-                }
+                    SCSICommand command;
+                    bool stopping = !m_commandQueue.TryDequeue(out command);
+                    if (stopping)
+                    {
+                        return;
+                    }
 
-                byte[] responseBytes;
-                SCSIStatusCodeName status = ExecuteCommand(command.CommandBytes, command.LUN, command.Data, out responseBytes);
-                command.OnCommandCompleted(status, responseBytes, command.Task);
+                    byte[] responseBytes;
+                    SCSIStatusCodeName status;
+                    try
+                    {
+                        status = ExecuteCommand(command.CommandBytes, command.LUN, command.Data, out responseBytes);
+                    }
+                    catch
+                    {
+                        status = SCSIStatusCodeName.TaskAborted;
+                        responseBytes = new byte[0];
+                    }
+
+                    try
+                    {
+                        command.OnCommandCompleted(status, responseBytes, command.Task);
+                    }
+                    catch
+                    {
+                    }
+                }
+            }
+            finally
+            {
+                Interlocked.Decrement(ref s_activeWorkerCount);
             }
         }
 
@@ -63,7 +97,25 @@ namespace SCSI
             command.Data = data;
             command.OnCommandCompleted = OnCommandCompleted;
             command.Task = task;
-            m_commandQueue.Enqueue(command);
+            if (!m_commandQueue.TryEnqueue(command))
+            {
+                try
+                {
+                    OnCommandCompleted(SCSIStatusCodeName.TaskAborted, new byte[0], task);
+                }
+                catch
+                {
+                }
+            }
+        }
+
+        public void Stop()
+        {
+            m_commandQueue.Stop();
+            if (Thread.CurrentThread != m_workerThread)
+            {
+                m_workerThread.Join();
+            }
         }
 
         public abstract SCSIStatusCodeName ExecuteCommand(byte[] commandBytes, LUNStructure lun, byte[] data, out byte[] response);
@@ -95,6 +147,14 @@ namespace SCSI
             if (handler != null)
             {
                 handler(sender, args);
+            }
+        }
+
+        internal static int ActiveWorkerCount
+        {
+            get
+            {
+                return Interlocked.CompareExchange(ref s_activeWorkerCount, 0, 0);
             }
         }
     }
