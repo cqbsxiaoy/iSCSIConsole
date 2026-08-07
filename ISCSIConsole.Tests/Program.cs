@@ -231,9 +231,11 @@ namespace ISCSIConsole.Tests
             string directory = Path.Combine(Path.GetTempPath(), "ISCSIConsole.Tests.Pipe." + Guid.NewGuid().ToString("N"));
             string configPath = Path.Combine(directory, "service.xml");
             Directory.CreateDirectory(directory);
-            HeadlessServiceRuntime runtime = new HeadlessServiceRuntime(new ISCSIServer(), new ServiceConfiguration(), configPath);
+            ISCSIServer server = new ISCSIServer();
+            HeadlessServiceRuntime runtime = new HeadlessServiceRuntime(server, new ServiceConfiguration(), configPath);
             try
             {
+                server.Start(new IPEndPoint(IPAddress.Loopback, 0), null);
                 runtime.StartManagementPipe();
                 Exception[] errors = new Exception[32];
                 Thread[] clients = new Thread[32];
@@ -275,6 +277,7 @@ namespace ISCSIConsole.Tests
             }
             finally
             {
+                server.Stop();
                 runtime.Stop();
                 if (Directory.Exists(directory))
                 {
