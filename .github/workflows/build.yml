@@ -45,10 +45,25 @@ jobs:
       - name: Build and run tests
         shell: pwsh
         run: |
+          New-Item -ItemType Directory -Path artifacts -Force | Out-Null
+          $testLog = "artifacts/test-output.log"
           msbuild ISCSIConsole.Tests/ISCSIConsole.Tests.csproj /p:Configuration=Release /p:SkipILMerge=true /p:SkipILRepack=true
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          & ISCSIConsole.Tests/bin/Release/net472/ISCSIConsole.Tests.exe
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $buildExit = $LASTEXITCODE
+          if ($buildExit -ne 0) {
+            "TEST_BUILD_EXIT=$buildExit" | Set-Content -LiteralPath $testLog
+            exit $buildExit
+          }
+          & ISCSIConsole.Tests/bin/Release/net472/ISCSIConsole.Tests.exe 2>&1 | Tee-Object -FilePath $testLog
+          $testExit = $LASTEXITCODE
+          if ($testExit -ne 0) { exit $testExit }
+
+      - name: Upload test log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: iSCSIConsole-test-log-${{ github.run_id }}
+          path: artifacts/test-output.log
+          if-no-files-found: warn
 
       - name: Merge single executable
         shell: pwsh
