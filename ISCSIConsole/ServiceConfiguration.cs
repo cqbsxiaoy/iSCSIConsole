@@ -123,7 +123,7 @@ namespace ISCSIConsole
 
     public class DiskConfiguration
     {
-        public const int DefaultServiceCacheSizeMB = 16;
+        public const int DefaultServiceCacheSizeMB = 32;
         public const string TypeDiskImage = "DiskImage";
         public const string TypePhysicalDisk = "PhysicalDisk";
         public const string TypeVolume = "Volume";

@@ -24,6 +24,11 @@ namespace ISCSI.Server
         public static int PendingAcceptCount = 64;
         public static int MinimumWorkerThreads = 128;
         public static int MinimumCompletionPortThreads = 128;
+        // A VHD/VHDX target is read in large SCSI bursts during Windows boot.
+        // Keep a generous per-connection socket window so the kernel can
+        // absorb several outstanding bursts on 10GbE without stalling the
+        // sender thread.  This is a socket buffer, not an application cache.
+        public static int SocketBufferSize = 2 * 1024 * 1024;
         private const int SendPollTimeoutMicroseconds = 1000 * 1000;
 
         private Socket m_listenerSocket;
@@ -208,6 +213,15 @@ namespace ISCSI.Server
 
             ConnectionState state = new ConnectionState();
             state.ConnectionParameters.InitiatorEndPoint = clientSocket.RemoteEndPoint as IPEndPoint;
+            try
+            {
+                clientSocket.ReceiveBufferSize = SocketBufferSize;
+                clientSocket.SendBufferSize = SocketBufferSize;
+            }
+            catch (SocketException ex)
+            {
+                Log(Severity.Debug, "[{0}] Could not enlarge TCP buffers: {1}", state.ConnectionIdentifier, ex.Message);
+            }
             // Disable the Nagle Algorithm for this tcp socket:
             clientSocket.NoDelay = true;
             state.ClientSocket = clientSocket;

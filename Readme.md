@@ -120,7 +120,7 @@ iSCSIConsole.exe /addtarget D:\iSCSI\children\001122AABBCC.vhdx pc-001122aabbcc 
 
 The iPXE script for that client must set the same `initiator-iqn` before `sanboot`. A future controller can create/delete the differencing VHDX itself, then use `/addtarget` and `/removetarget` only to control the corresponding IQN service.
 
-Use `/cachemb <MB>` with command line target mode or `/addtarget` to change the read cache size for that disk image. `/addtarget` defaults to 16MB so that 80 targets have at most about 1.25GB of user-space read cache; Windows can still share cached pages from the common read-only parent file. Saved service configuration stores this value as `CacheSizeMB` on each disk image entry.
+Use `/cachemb <MB>` with command line target mode or `/addtarget` to change the read cache size for that disk image. `/addtarget` defaults to 32MB so that 80 targets have at most about 2.5GB of user-space read cache; Windows can still share cached pages from the common read-only parent file. Sequential reads coalesce adjacent cache misses into up to 512KB reads, reducing repeated differencing VHDX metadata lookups. Saved service configuration stores this value as `CacheSizeMB` on each disk image entry.
 
 `/singleclient` is intended for the current single-machine maintenance workflow. It is not needed for classroom targets when every client has a unique child target protected by `/initiator`.
 

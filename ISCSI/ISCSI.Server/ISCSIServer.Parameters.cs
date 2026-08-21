@@ -24,11 +24,11 @@ namespace ISCSI.Server
             public static int MaxConnections = 1; // implementation limit
             public static bool InitialR2T = false;
             public static bool ImmediateData = true;
-            public static int MaxBurstLength = DefaultParameters.Session.MaxBurstLength;
-            public static int FirstBurstLength = DefaultParameters.Session.FirstBurstLength;
+            public static int MaxBurstLength = 1024 * 1024;
+            public static int FirstBurstLength = 256 * 1024;
             public static int DefaultTime2Wait = 0;
             public static int DefaultTime2Retain = 20;
-            public static int MaxOutstandingR2T = 16;
+            public static int MaxOutstandingR2T = 32;
             public static bool DataPDUInOrder = true; // implementation limit
             public static bool DataSequenceInOrder = true; // implementation limit
             public static int ErrorRecoveryLevel = 0; // implementation limit
@@ -37,7 +37,7 @@ namespace ISCSI.Server
         public class DeclaredParameters
         {
             // Connection parameters:
-            public static int MaxRecvDataSegmentLength = 262144;
+            public static int MaxRecvDataSegmentLength = 1024 * 1024;
         }
     }
 }

@@ -10,12 +10,21 @@ namespace ISCSIConsole
     {
         public const int DefaultCacheSizeMB = 256;
         public const int DefaultBlockSizeKB = 64;
+        public const int DefaultReadAheadBlocks = 8;
 
         private class CacheEntry
         {
             public long BlockIndex;
-            public byte[] Data;
+            public CacheGroup Group;
+            public int Offset;
+            public int Length;
             public LinkedListNode<long> Node;
+        }
+
+        private class CacheGroup
+        {
+            public byte[] Data;
+            public int ReferenceCount;
         }
 
         private readonly Disk m_innerDisk;
@@ -32,6 +41,7 @@ namespace ISCSIConsole
         private long m_cacheMisses;
         private long m_evictions;
         private long m_writeInvalidations;
+        private long m_readAheadBlocks;
 
         public CachedDisk(Disk innerDisk, int cacheSizeMB)
         {
@@ -71,16 +81,22 @@ namespace ISCSIConsole
                     long blockIndex = currentSector / m_blockSectorCount;
                     int offsetSectors = (int)(currentSector - (blockIndex * m_blockSectorCount));
                     int sectorsToCopy = Math.Min(remainingSectors, m_blockSectorCount - offsetSectors);
-                    CacheEntry entry = GetOrReadBlock(blockIndex);
-                    sectorsToCopy = Math.Min(sectorsToCopy, (entry.Data.Length / BytesPerSector) - offsetSectors);
+                    int readAheadBlocks = 1;
+                    if (remainingSectors > sectorsToCopy)
+                    {
+                        int blocksRemaining = (remainingSectors - sectorsToCopy + m_blockSectorCount - 1) / m_blockSectorCount;
+                        readAheadBlocks = Math.Min(DefaultReadAheadBlocks, blocksRemaining + 1);
+                    }
+                    CacheEntry entry = GetOrReadBlock(blockIndex, readAheadBlocks);
+                    sectorsToCopy = Math.Min(sectorsToCopy, (entry.Length / BytesPerSector) - offsetSectors);
                     if (sectorsToCopy <= 0)
                     {
                         throw new EndOfStreamException("Cached disk read reached the end of the disk image.");
                     }
 
                     Buffer.BlockCopy(
-                        entry.Data,
-                        offsetSectors * BytesPerSector,
+                        entry.Group.Data,
+                        entry.Offset + (offsetSectors * BytesPerSector),
                         result,
                         resultOffset,
                         sectorsToCopy * BytesPerSector);
@@ -182,9 +198,11 @@ namespace ISCSIConsole
                 double cachedMB = m_cachedBytes / 1024.0 / 1024.0;
                 return String.Format(
                     CultureInfo.InvariantCulture,
-                    "cacheMB={0} blockKB={1} readCommands={2} blocks={3} hits={4} misses={5} hitRate={6:0.0}% cachedMB={7:0.0} evictions={8} writeInvalidations={9}",
+                    "cacheMB={0} blockKB={1} readAheadBlocks={2} prefetchedBlocks={3} readCommands={4} blocks={5} hits={6} misses={7} hitRate={8:0.0}% cachedMB={9:0.0} evictions={10} writeInvalidations={11}",
                     m_cacheSizeMB,
                     DefaultBlockSizeKB,
+                    DefaultReadAheadBlocks,
+                    m_readAheadBlocks,
                     m_readCommands,
                     m_blocksRequested,
                     m_cacheHits,
@@ -196,7 +214,7 @@ namespace ISCSIConsole
             }
         }
 
-        private CacheEntry GetOrReadBlock(long blockIndex)
+        private CacheEntry GetOrReadBlock(long blockIndex, int requestedReadAheadBlocks)
         {
             m_blocksRequested++;
             CacheEntry entry;
@@ -210,21 +228,80 @@ namespace ISCSIConsole
             m_cacheMisses++;
             long blockStartSector = blockIndex * m_blockSectorCount;
             long sectorsInDisk = Size / BytesPerSector;
-            int sectorsToRead = (int)Math.Min(m_blockSectorCount, sectorsInDisk - blockStartSector);
+            if (blockStartSector < 0 || blockStartSector >= sectorsInDisk)
+            {
+                throw new EndOfStreamException("Cached disk block is outside the disk image.");
+            }
+
+            // A cache block remains 64KB so small random reads do not become
+            // expensive.  For a larger sequential SCSI read, combine adjacent
+            // misses into one inner-disk read.  This is especially useful for
+            // differencing VHDX images, where each inner read repeats the
+            // parent BAT/metadata lookup.
+            int maxCacheBlocks = (int)Math.Max(1, Math.Min(
+                (long)Int32.MaxValue,
+                m_maxBytes / ((long)m_blockSectorCount * BytesPerSector)));
+            int blocksToRead = Math.Max(1, Math.Min(DefaultReadAheadBlocks, requestedReadAheadBlocks));
+            blocksToRead = Math.Min(blocksToRead, maxCacheBlocks);
+            for (int candidate = 1; candidate < blocksToRead; candidate++)
+            {
+                if (m_entries.ContainsKey(blockIndex + candidate))
+                {
+                    // Stop before the first already cached block.  The range
+                    // must never include an existing entry because it is
+                    // inserted as a group below.
+                    blocksToRead = candidate;
+                    break;
+                }
+            }
+
+            long availableSectors = sectorsInDisk - blockStartSector;
+            int sectorsToRead = (int)Math.Min(
+                availableSectors,
+                (long)m_blockSectorCount * blocksToRead);
             if (sectorsToRead <= 0)
             {
                 throw new EndOfStreamException("Cached disk block is outside the disk image.");
             }
-            byte[] data = m_innerDisk.ReadSectors(blockStartSector, sectorsToRead);
 
-            entry = new CacheEntry();
-            entry.BlockIndex = blockIndex;
-            entry.Data = data;
-            entry.Node = m_lru.AddFirst(blockIndex);
-            m_entries.Add(blockIndex, entry);
+            byte[] data = m_innerDisk.ReadSectors(blockStartSector, sectorsToRead);
+            CacheGroup group = new CacheGroup();
+            group.Data = data;
+            group.ReferenceCount = 0;
             m_cachedBytes += data.Length;
-            TrimCache();
-            return entry;
+            int dataOffset = 0;
+            CacheEntry firstEntry = null;
+            long currentBlockIndex = blockIndex;
+            int remainingBlockSectors = sectorsToRead;
+            while (remainingBlockSectors > 0)
+            {
+                int blockSectors = Math.Min(m_blockSectorCount, remainingBlockSectors);
+                int blockBytes = blockSectors * BytesPerSector;
+
+                CacheEntry newEntry = new CacheEntry();
+                newEntry.BlockIndex = currentBlockIndex;
+                newEntry.Group = group;
+                newEntry.Offset = dataOffset;
+                newEntry.Length = blockBytes;
+                newEntry.Node = m_lru.AddFirst(currentBlockIndex);
+                m_entries.Add(currentBlockIndex, newEntry);
+                group.ReferenceCount++;
+                if (firstEntry == null)
+                {
+                    firstEntry = newEntry;
+                }
+                else
+                {
+                    m_readAheadBlocks++;
+                }
+                TrimCache();
+
+                dataOffset += blockBytes;
+                remainingBlockSectors -= blockSectors;
+                currentBlockIndex++;
+            }
+
+            return firstEntry;
         }
 
         private int CheckDiskBoundaries(long sectorIndex, int sectorCount)
@@ -291,7 +368,11 @@ namespace ISCSIConsole
             {
                 m_lru.Remove(entry.Node);
                 m_entries.Remove(blockIndex);
-                m_cachedBytes -= entry.Data.Length;
+                entry.Group.ReferenceCount--;
+                if (entry.Group.ReferenceCount == 0)
+                {
+                    m_cachedBytes -= entry.Group.Data.Length;
+                }
                 if (evicted)
                 {
                     m_evictions++;

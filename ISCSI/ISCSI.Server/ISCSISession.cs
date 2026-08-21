@@ -12,17 +12,17 @@ namespace ISCSI.Server
 {
     internal class ISCSISession
     {
-        public int MaxConnections = DefaultParameters.Session.MaxConnections;
-        public bool InitialR2T = DefaultParameters.Session.InitialR2T;
-        public bool ImmediateData = DefaultParameters.Session.ImmediateData;
-        public int MaxBurstLength = DefaultParameters.Session.MaxBurstLength;
-        public int FirstBurstLength = DefaultParameters.Session.FirstBurstLength;
-        public int DefaultTime2Wait = DefaultParameters.Session.DefaultTime2Wait;
-        public int DefaultTime2Retain = DefaultParameters.Session.DefaultTime2Retain;
-        public int MaxOutstandingR2T = DefaultParameters.Session.MaxOutstandingR2T;
-        public bool DataPDUInOrder = DefaultParameters.Session.DataPDUInOrder;
-        public bool DataSequenceInOrder = DefaultParameters.Session.DataSequenceInOrder;
-        public int ErrorRecoveryLevel = DefaultParameters.Session.ErrorRecoveryLevel;
+        public int MaxConnections = ISCSIServer.DesiredParameters.MaxConnections;
+        public bool InitialR2T = ISCSIServer.DesiredParameters.InitialR2T;
+        public bool ImmediateData = ISCSIServer.DesiredParameters.ImmediateData;
+        public int MaxBurstLength = ISCSIServer.DesiredParameters.MaxBurstLength;
+        public int FirstBurstLength = ISCSIServer.DesiredParameters.FirstBurstLength;
+        public int DefaultTime2Wait = ISCSIServer.DesiredParameters.DefaultTime2Wait;
+        public int DefaultTime2Retain = ISCSIServer.DesiredParameters.DefaultTime2Retain;
+        public int MaxOutstandingR2T = ISCSIServer.DesiredParameters.MaxOutstandingR2T;
+        public bool DataPDUInOrder = ISCSIServer.DesiredParameters.DataPDUInOrder;
+        public bool DataSequenceInOrder = ISCSIServer.DesiredParameters.DataSequenceInOrder;
+        public int ErrorRecoveryLevel = ISCSIServer.DesiredParameters.ErrorRecoveryLevel;
 
         public uint CommandQueueSize = ISCSIServer.DefaultCommandQueueSize;
 

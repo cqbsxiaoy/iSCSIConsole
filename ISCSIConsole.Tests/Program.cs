@@ -65,9 +65,13 @@ namespace ISCSIConsole.Tests
             private readonly byte[] m_data = new byte[2 * 1024 * 1024];
 
             public int FlushCount { get; private set; }
+            public int ReadCount { get; private set; }
+            public int LastReadSectorCount { get; private set; }
 
             public override byte[] ReadSectors(long sectorIndex, int sectorCount)
             {
+                ReadCount++;
+                LastReadSectorCount = sectorCount;
                 byte[] result = new byte[sectorCount * BytesPerSector];
                 Buffer.BlockCopy(m_data, checked((int)(sectorIndex * BytesPerSector)), result, 0, result.Length);
                 return result;
@@ -96,6 +100,7 @@ namespace ISCSIConsole.Tests
                 RunTest("CDB12 serialization", TestCdb12Serialization);
                 RunTest("SCSI flush and FUA", TestScsiFlushAndFua);
                 RunTest("READ/WRITE12 and cache", TestReadWrite12AndCacheInvalidation);
+                RunTest("sequential cache read coalescing", TestSequentialCacheReadCoalescing);
                 RunTest("single-client gate", TestSingleClientGate);
                 RunTest("initiator-name gate", TestInitiatorNameGate);
                 RunTest("80-target worker lifecycle", TestTargetWorkerLifecycle);
@@ -218,6 +223,23 @@ namespace ISCSIConsole.Tests
             Assert(target.ExecuteCommand(verify.GetBytes(), (ushort)0, null, out response) == SCSIStatusCodeName.Good, "VERIFY(12)");
         }
 
+        private static void TestSequentialCacheReadCoalescing()
+        {
+            MemoryDisk inner = new MemoryDisk();
+            ISCSIConsole.CachedDisk cached = new ISCSIConsole.CachedDisk(inner, 1);
+
+            int sectorsPerCacheBlock = (ISCSIConsole.CachedDisk.DefaultBlockSizeKB * 1024) / inner.BytesPerSector;
+            int requestedSectors = sectorsPerCacheBlock * 8;
+            byte[] firstRead = cached.ReadSectors(0, requestedSectors);
+
+            Assert(firstRead.Length == requestedSectors * inner.BytesPerSector, "coalesced read length");
+            Assert(inner.ReadCount == 1, "sequential cache misses are coalesced into one inner read");
+            Assert(inner.LastReadSectorCount == requestedSectors, "coalesced read covers the requested range");
+
+            cached.ReadSectors(sectorsPerCacheBlock * 7, 1);
+            Assert(inner.ReadCount == 1, "coalesced blocks remain cached");
+        }
+
         private static void TestSingleClientGate()
         {
             ISCSIConsole.SingleClientGate gate = new ISCSIConsole.SingleClientGate();
@@ -261,9 +283,9 @@ namespace ISCSIConsole.Tests
 
         private static void TestClassroomCacheBudget()
         {
-            Assert(DiskConfiguration.DefaultServiceCacheSizeMB == 16, "classroom target default cache");
+            Assert(DiskConfiguration.DefaultServiceCacheSizeMB == 32, "classroom target default cache");
             long maximumCacheMB = 80L * DiskConfiguration.DefaultServiceCacheSizeMB;
-            Assert(maximumCacheMB <= 1280, "80-target cache budget stays at or below 1280 MB");
+            Assert(maximumCacheMB <= 2560, "80-target cache budget stays at or below 2560 MB");
 
             TargetConfiguration configuration = new TargetConfiguration();
             configuration.TargetName = "iqn.2026-08.cn.bscx:test-client";
@@ -271,7 +293,10 @@ namespace ISCSIConsole.Tests
             configuration.Disks.Add(DiskConfiguration.CreateDiskImage("client.vhdx", false));
             configuration.Normalize();
             Assert(configuration.AllowedInitiatorName == "iqn.2026-08.cn.bscx:mac-aabbccddeeff", "initiator binding is normalized");
-            Assert(configuration.Disks[0].CacheSizeMB == 16, "new service disk uses classroom cache default");
+            Assert(configuration.Disks[0].CacheSizeMB == 32, "new service disk uses classroom cache default");
+            Assert(ISCSIServer.DeclaredParameters.MaxRecvDataSegmentLength == 1024 * 1024, "server advertises a 1MB data segment");
+            Assert(ISCSIServer.DesiredParameters.MaxBurstLength == 1024 * 1024, "server allows 1MB SCSI bursts");
+            Assert(ISCSIServer.SocketBufferSize >= 2 * 1024 * 1024, "server socket buffers are sized for burst traffic");
         }
 
         private static void TestConcurrentManagementPipe()
