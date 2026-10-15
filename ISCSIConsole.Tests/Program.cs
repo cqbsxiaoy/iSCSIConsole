@@ -261,6 +261,14 @@ namespace ISCSIConsole.Tests
             Assert(count == 0, "per-packet logs filtered before formatting and output");
             server.Log(ISCSI.Logging.Severity.Warning, "Warning {0}", 1);
             Assert(count == 1, "operational warnings remain visible");
+
+            VirtualSCSITarget target = CreateTarget(new MemoryDisk());
+            target.LogLevel = ISCSI.Logging.Severity.Information;
+            target.OnLogEntry += delegate(object sender, ISCSI.Logging.LogEntry entry) { count++; };
+            target.Log(ISCSI.Logging.Severity.Verbose, "{", 1);
+            Assert(count == 1, "SCSI command logs filtered before formatting");
+            target.Log(ISCSI.Logging.Severity.Error, "Read error");
+            Assert(count == 2, "SCSI errors remain visible");
         }
 
         private static void TestCacheEvictionAndShortRead()
@@ -344,6 +352,7 @@ namespace ISCSIConsole.Tests
             start.RedirectStandardError = true;
             start.EnvironmentVariables["DOTNET_ROOT"] = Path.Combine(Path.GetTempPath(), "no-installed-dotnet");
             start.EnvironmentVariables["DOTNET_MULTILEVEL_LOOKUP"] = "0";
+            start.EnvironmentVariables["ISCSICONSOLE_DEBUG"] = "0";
             System.Diagnostics.Process process = System.Diagnostics.Process.Start(start);
             process.OutputDataReceived += delegate(object sender, System.Diagnostics.DataReceivedEventArgs e) { if (e.Data != null) { Console.WriteLine("PUBLISHED " + e.Data); } };
             process.ErrorDataReceived += delegate(object sender, System.Diagnostics.DataReceivedEventArgs e) { if (e.Data != null) { Console.WriteLine("PUBLISHED_ERROR " + e.Data); } };
@@ -368,6 +377,7 @@ namespace ISCSIConsole.Tests
             Directory.CreateDirectory(directory);
             string configPath = Path.Combine(directory, "targets.xml");
             string statusPath = Path.Combine(directory, "ready.txt");
+            string logPath = Path.Combine(directory, "service.log");
             string diskPath = Path.Combine(directory, "disk.vhdx");
             string configArgument = " /config \"" + configPath + "\"";
             System.Diagnostics.Process service = null;
@@ -385,7 +395,7 @@ namespace ISCSIConsole.Tests
                 image.WriteSectors(2048, FilledSector(0x37));
                 image.Flush();
                 image.ReleaseLock();
-                service = StartPublished(exe, "/start" + configArgument + " /status \"" + statusPath + "\"");
+                service = StartPublished(exe, "/start" + configArgument + " /status \"" + statusPath + "\" /log \"" + logPath + "\"");
                 DateTime deadline = DateTime.UtcNow.AddSeconds(12);
                 while (DateTime.UtcNow < deadline && !service.HasExited && !File.Exists(statusPath)) { Thread.Sleep(100); }
                 Assert(File.Exists(statusPath) && File.ReadAllText(statusPath).StartsWith("READY"), "published service ready without installed runtime");
@@ -407,6 +417,9 @@ namespace ISCSIConsole.Tests
                 finally { reopened.ReleaseLock(); }
                 PublishedCommand(exe, "/stop" + configArgument);
                 Assert(service.WaitForExit(5000) && service.ExitCode == 0, "published service stops cleanly");
+                string serviceLog = File.ReadAllText(logPath);
+                Assert(serviceLog.Contains("Starting Server"), "normal /log retains operational information");
+                Assert(!serviceLog.Contains("Verbose") && !serviceLog.Contains("Debug"), "normal /log skips per-packet and SCSI command logging");
             }
             finally
             {

@@ -163,7 +163,7 @@ jobs:
             - net472: existing Windows GUI and command-line version; requires .NET Framework 4.7.2.
             - headless-win-x64: command-line version with its own .NET 10 runtime, no .NET installation or WinForms required. This is self-contained, not NativeAOT. Windows 10/11 and corresponding Server systems; minimal WinPE compatibility depends on the PE components and requires testing.
 
-            Fixes image-open handle leaks and incomplete reads; reduces read-cache node allocation and disabled-log overhead. Existing BSCX command-line options are preserved. No write-back cache or promised throughput multiplier.
+            Fixes image-open handle leaks and incomplete reads; reduces read-cache node allocation and per-packet logging overhead, including normal /log operation. Set ISCSICONSOLE_DEBUG=1 only when detailed diagnosis is needed. Existing BSCX command-line options are preserved. No write-back cache or promised throughput multiplier.
           files: |
             artifacts/iSCSIConsole-net472.zip
             artifacts/iSCSIConsole-headless-win-x64.zip

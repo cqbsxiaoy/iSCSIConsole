@@ -18,10 +18,12 @@ namespace SCSI
         private List<Disk> m_disks;
 
         public event EventHandler<LogEntry> OnLogEntry;
+        public Severity LogLevel { get; set; }
 
         public VirtualSCSITarget(List<Disk> disks)
         {
             m_disks = disks;
+            LogLevel = Severity.Trace;
         }
 
         /// <summary>
@@ -495,6 +497,7 @@ namespace SCSI
 
         public void Log(Severity severity, string message)
         {
+            if (severity > LogLevel) { return; }
             // To be thread-safe we must capture the delegate reference first
             EventHandler<LogEntry> handler = OnLogEntry;
             if (handler != null)
@@ -505,6 +508,7 @@ namespace SCSI
 
         public void Log(Severity severity, string message, params object[] args)
         {
+            if (severity > LogLevel) { return; }
             if (OnLogEntry != null)
             {
                 Log(severity, String.Format(message, args));

@@ -22,6 +22,7 @@ namespace ISCSIConsole
         private const int GracefulStopWaitMilliseconds = 5000;
         private const int ForceKillWaitMilliseconds = 3000;
         private static bool m_diagnosticLogEnabled;
+        private static Severity m_logLevel = Severity.Information;
 
         public static bool IsServeCommand(string[] args)
         {
@@ -52,6 +53,10 @@ namespace ISCSIConsole
             bool logOpened = false;
             try
             {
+                // BSCX supplies /log during normal classroom operation. A log
+                // destination alone must not enable synchronous per-packet I/O.
+                m_logLevel = Environment.GetEnvironmentVariable("ISCSICONSOLE_DEBUG") == "1"
+                    ? Severity.Debug : Severity.Information;
                 if (!String.IsNullOrEmpty(options.LogPath))
                 {
                     if (!Program.OpenLogFile(options.LogPath))
@@ -93,6 +98,7 @@ namespace ISCSIConsole
             finally
             {
                 m_diagnosticLogEnabled = false;
+                m_logLevel = Severity.Information;
                 if (logOpened)
                 {
                     Program.CloseLogFile();
@@ -143,7 +149,7 @@ namespace ISCSIConsole
                 };
 
                 server = new ISCSIServer();
-                server.LogLevel = m_diagnosticLogEnabled ? Severity.Debug : Severity.Information;
+                server.LogLevel = m_logLevel;
                 server.OnLogEntry += Server_OnLogEntry;
                 server.AddTarget(target);
                 runtime = new HeadlessServiceRuntime(server, new ServiceConfiguration(), options.ConfigPath);
@@ -218,7 +224,7 @@ namespace ISCSIConsole
                 }
 
                 server = new ISCSIServer();
-                server.LogLevel = m_diagnosticLogEnabled ? Severity.Debug : Severity.Information;
+                server.LogLevel = m_logLevel;
                 server.OnLogEntry += Server_OnLogEntry;
                 runtime = new HeadlessServiceRuntime(server, configuration, options.ConfigPath);
 
@@ -1520,6 +1526,7 @@ namespace ISCSIConsole
             SCSI.VirtualSCSITarget virtualTarget = target.SCSITarget as SCSI.VirtualSCSITarget;
             if (virtualTarget != null)
             {
+                virtualTarget.LogLevel = m_logLevel;
                 virtualTarget.OnLogEntry += Target_OnLogEntry;
             }
         }
