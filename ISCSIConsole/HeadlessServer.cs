@@ -17,7 +17,9 @@ namespace ISCSIConsole
     {
         private const string DefaultTargetPrefix = "iqn.1991-05.com.microsoft";
         private const int DefaultPort = 3260;
-        private const int GracefulStopWaitMilliseconds = 1000;
+        // The management listener may take up to two seconds to leave its
+        // blocking wait. Do not kill the process before that cleanup finishes.
+        private const int GracefulStopWaitMilliseconds = 5000;
         private const int ForceKillWaitMilliseconds = 3000;
         private static bool m_diagnosticLogEnabled;
 

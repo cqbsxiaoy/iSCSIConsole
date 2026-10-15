@@ -325,9 +325,16 @@ namespace ISCSIConsole.Tests
             System.Diagnostics.ProcessStartInfo start = new System.Diagnostics.ProcessStartInfo(exe, arguments);
             start.UseShellExecute = false;
             start.CreateNoWindow = true;
+            start.RedirectStandardOutput = true;
+            start.RedirectStandardError = true;
             start.EnvironmentVariables["DOTNET_ROOT"] = Path.Combine(Path.GetTempPath(), "no-installed-dotnet");
             start.EnvironmentVariables["DOTNET_MULTILEVEL_LOOKUP"] = "0";
-            return System.Diagnostics.Process.Start(start);
+            System.Diagnostics.Process process = System.Diagnostics.Process.Start(start);
+            process.OutputDataReceived += delegate(object sender, System.Diagnostics.DataReceivedEventArgs e) { if (e.Data != null) { Console.WriteLine("PUBLISHED " + e.Data); } };
+            process.ErrorDataReceived += delegate(object sender, System.Diagnostics.DataReceivedEventArgs e) { if (e.Data != null) { Console.WriteLine("PUBLISHED_ERROR " + e.Data); } };
+            process.BeginOutputReadLine();
+            process.BeginErrorReadLine();
+            return process;
         }
 
         private static void PublishedCommand(string exe, string arguments)
