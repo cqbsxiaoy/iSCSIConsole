@@ -105,6 +105,7 @@ namespace ISCSIConsole.Tests
                 RunTest("cache eviction and short read rejection", TestCacheEvictionAndShortRead);
                 RunTest("VHD logical short read rejection", TestLogicalShortRead);
                 RunTest("failed image open releases handles", TestFailedOpenReleasesHandles);
+                RunTest("disabled packet logging avoids formatting", TestQuietPacketLogging);
                 RunTest("single-client gate", TestSingleClientGate);
                 RunTest("initiator-name gate", TestInitiatorNameGate);
                 RunTest("80-target worker lifecycle", TestTargetWorkerLifecycle);
@@ -246,6 +247,20 @@ namespace ISCSIConsole.Tests
 
             cached.ReadSectors(sectorsPerCacheBlock * 7, 1);
             Assert(inner.ReadCount == 1, "coalesced blocks remain cached");
+        }
+
+        private static void TestQuietPacketLogging()
+        {
+            ISCSIServer server = new ISCSIServer();
+            server.LogLevel = ISCSI.Logging.Severity.Information;
+            int count = 0;
+            server.OnLogEntry += delegate(object sender, ISCSI.Logging.LogEntry entry) { count++; };
+            // A filtered message must not even reach String.Format.
+            server.Log(ISCSI.Logging.Severity.Debug, "{", 1);
+            server.Log(ISCSI.Logging.Severity.Verbose, "normal packet");
+            Assert(count == 0, "per-packet logs filtered before formatting and output");
+            server.Log(ISCSI.Logging.Severity.Warning, "Warning {0}", 1);
+            Assert(count == 1, "operational warnings remain visible");
         }
 
         private static void TestCacheEvictionAndShortRead()

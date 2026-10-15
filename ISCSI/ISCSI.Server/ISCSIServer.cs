@@ -42,12 +42,14 @@ namespace ISCSI.Server
         private ConnectionManager m_connectionManager = new ConnectionManager();
 
         public event EventHandler<LogEntry> OnLogEntry;
+        public Severity LogLevel { get; set; }
 
         /// <summary>
         /// Server needs to be started with Start()
         /// </summary>
         public ISCSIServer()
         {
+            LogLevel = Severity.Trace;
         }
 
         public void AddTarget(ISCSITarget target)
@@ -538,6 +540,7 @@ namespace ISCSI.Server
 
         public void Log(Severity severity, string message)
         {
+            if (severity > LogLevel) { return; }
             // To be thread-safe we must capture the delegate reference first
             EventHandler<LogEntry> handler = OnLogEntry;
             if (handler != null)
@@ -548,6 +551,7 @@ namespace ISCSI.Server
 
         public void Log(Severity severity, string message, params object[] args)
         {
+            if (severity > LogLevel) { return; }
             EventHandler<LogEntry> handler = OnLogEntry;
             if (handler != null)
             {

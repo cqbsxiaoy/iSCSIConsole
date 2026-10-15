@@ -143,6 +143,7 @@ namespace ISCSIConsole
                 };
 
                 server = new ISCSIServer();
+                server.LogLevel = m_diagnosticLogEnabled ? Severity.Debug : Severity.Information;
                 server.OnLogEntry += Server_OnLogEntry;
                 server.AddTarget(target);
                 runtime = new HeadlessServiceRuntime(server, new ServiceConfiguration(), options.ConfigPath);
@@ -217,6 +218,7 @@ namespace ISCSIConsole
                 }
 
                 server = new ISCSIServer();
+                server.LogLevel = m_diagnosticLogEnabled ? Severity.Debug : Severity.Information;
                 server.OnLogEntry += Server_OnLogEntry;
                 runtime = new HeadlessServiceRuntime(server, configuration, options.ConfigPath);
 
