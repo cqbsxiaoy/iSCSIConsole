@@ -548,7 +548,11 @@ namespace ISCSI.Server
 
         public void Log(Severity severity, string message, params object[] args)
         {
-            Log(severity, String.Format(message, args));
+            EventHandler<LogEntry> handler = OnLogEntry;
+            if (handler != null)
+            {
+                handler(this, new LogEntry(DateTime.Now, severity, "iSCSI Server", String.Format(message, args)));
+            }
         }
 
         [System.Diagnostics.Conditional("TRACE")]

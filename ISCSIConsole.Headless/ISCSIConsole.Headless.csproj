@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>ISCSIConsole</AssemblyName>
+    <RootNamespace>ISCSIConsole</RootNamespace>
+    <Version>1.5.9</Version>
+    <ApplicationIcon>../ISCSIConsole/Icons/SCSI.ico</ApplicationIcon>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>true</SelfContained>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <!-- DiscUtils constructors and XML configuration use reflection. -->
+    <PublishTrimmed>false</PublishTrimmed>
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
+    <ServerGarbageCollection>true</ServerGarbageCollection>
+    <SkipILMerge>true</SkipILMerge>
+    <SkipILRepack>true</SkipILRepack>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="Program.cs" />
+    <Compile Include="../ISCSIConsole/Properties/AssemblyInfo.cs" Link="Properties/AssemblyInfo.cs" />
+    <Compile Include="../ISCSIConsole/HeadlessServer.cs" Link="HeadlessServer.cs" />
+    <Compile Include="../ISCSIConsole/HeadlessServiceRuntime.cs" Link="HeadlessServiceRuntime.cs" />
+    <Compile Include="../ISCSIConsole/ServiceConfiguration.cs" Link="ServiceConfiguration.cs" />
+    <Compile Include="../ISCSIConsole/SingleClientGate.cs" Link="SingleClientGate.cs" />
+    <Compile Include="../ISCSIConsole/InitiatorNameGate.cs" Link="InitiatorNameGate.cs" />
+    <Compile Include="../ISCSIConsole/Program.Log.cs" Link="Program.Log.cs" />
+    <Compile Include="../ISCSIConsole/Disks/*.cs" Link="Disks/%(Filename)%(Extension)" />
+    <Compile Include="../ISCSIConsole/Helpers/ISCSINameHelper.cs" Link="Helpers/ISCSINameHelper.cs" />
+    <Compile Include="../ISCSIConsole/Helpers/LockUtils.cs" Link="Helpers/LockUtils.cs" />
+    <Compile Include="../ISCSIConsole/Win32/VolumeInfo.cs" Link="Win32/VolumeInfo.cs" />
+    <ProjectReference Include="../ISCSI/ISCSI.csproj" />
+    <PackageReference Include="DiskAccessLibrary.Win32" Version="1.6.3" />
+    <PackageReference Include="DiscUtils.Vhd" Version="0.16.13" />
+    <PackageReference Include="DiscUtils.Vhdx" Version="0.16.13" />
+  </ItemGroup>
+</Project>

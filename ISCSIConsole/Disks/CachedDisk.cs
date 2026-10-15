@@ -265,6 +265,10 @@ namespace ISCSIConsole
             }
 
             byte[] data = m_innerDisk.ReadSectors(blockStartSector, sectorsToRead);
+            if (data == null || data.Length != sectorsToRead * BytesPerSector)
+            {
+                throw new EndOfStreamException("The disk image returned an incomplete cache block.");
+            }
             CacheGroup group = new CacheGroup();
             group.Data = data;
             group.ReferenceCount = 0;
@@ -294,13 +298,16 @@ namespace ISCSIConsole
                 {
                     m_readAheadBlocks++;
                 }
-                TrimCache();
 
                 dataOffset += blockBytes;
                 remainingBlockSectors -= blockSectors;
                 currentBlockIndex++;
             }
 
+            // Publish and account the whole buffer before eviction, then keep
+            // the block requested by the caller as the most recently used one.
+            Touch(firstEntry);
+            TrimCache();
             return firstEntry;
         }
 
@@ -332,7 +339,7 @@ namespace ISCSIConsole
         private void Touch(CacheEntry entry)
         {
             m_lru.Remove(entry.Node);
-            entry.Node = m_lru.AddFirst(entry.BlockIndex);
+            m_lru.AddFirst(entry.Node);
         }
 
         private void InvalidateRange(long sectorIndex, int sectorCount)

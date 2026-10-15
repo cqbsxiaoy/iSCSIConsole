@@ -13,6 +13,7 @@ namespace ISCSIConsole
     public partial class Program
     {
         private static FileStream m_logFile;
+        private static readonly object m_logLock = new object();
 
         public static bool OpenLogFile(string logFilePath)
         {
@@ -31,9 +32,9 @@ namespace ISCSIConsole
 
         public static void CloseLogFile()
         {
-            if (m_logFile != null)
+            lock (m_logLock)
             {
-                lock (m_logFile)
+                if (m_logFile != null)
                 {
                     m_logFile.Close();
                     m_logFile = null;
@@ -43,9 +44,10 @@ namespace ISCSIConsole
 
         public static void OnLogEntry(object sender, LogEntry entry)
         {
-            if (m_logFile != null && entry.Severity != Severity.Trace)
+            if (entry.Severity == Severity.Trace) { return; }
+            lock (m_logLock)
             {
-                lock (m_logFile)
+                if (m_logFile != null)
                 {
                     StreamWriter writer = new StreamWriter(m_logFile);
                     string timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss ");

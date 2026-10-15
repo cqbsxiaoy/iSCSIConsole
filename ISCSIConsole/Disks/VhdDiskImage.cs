@@ -26,7 +26,8 @@ namespace ISCSIConsole
             : base(diskImagePath, isReadOnly)
         {
             m_disk = OpenDisk(diskImagePath, isReadOnly, out m_isReadOnly, out m_fileLocator);
-            m_content = m_disk.Content;
+            try { m_content = m_disk.Content; }
+            catch { ReleaseLock(); throw; }
         }
 
         public override byte[] ReadSectors(long sectorIndex, int sectorCount)
@@ -208,7 +209,13 @@ namespace ISCSIConsole
             }
             catch (TargetInvocationException ex)
             {
+                ((FlushTrackingFileLocator)fileLocator).DisposeStreams();
                 throw ex.InnerException ?? ex;
+            }
+            catch
+            {
+                ((FlushTrackingFileLocator)fileLocator).DisposeStreams();
+                throw;
             }
         }
 
@@ -219,8 +226,7 @@ namespace ISCSIConsole
                 int bytesRead = stream.Read(buffer, offset, count);
                 if (bytesRead == 0)
                 {
-                    Array.Clear(buffer, offset, count);
-                    return;
+                    throw new EndOfStreamException("Unexpected end of VHD logical content; the requested sectors were not read.");
                 }
 
                 offset += bytesRead;

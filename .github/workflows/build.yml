@@ -65,6 +65,34 @@ jobs:
           path: artifacts/test-output.log
           if-no-files-found: warn
 
+      - name: Setup .NET for self-contained headless build
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Publish self-contained headless executable
+        shell: pwsh
+        run: |
+          dotnet publish ISCSIConsole.Headless/ISCSIConsole.Headless.csproj -c Release -r win-x64 --self-contained true -p:SkipILRepack=true -o artifacts/iSCSIConsole-headless-win-x64
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Test headless runtime and published executable
+        shell: pwsh
+        run: |
+          dotnet build ISCSIConsole.Tests/ISCSIConsole.Tests.csproj -c Release -p:HeadlessTests=true -p:SkipILRepack=true
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $env:ISCSI_CONSOLE_EXE = (Resolve-Path artifacts/iSCSIConsole-headless-win-x64/ISCSIConsole.exe).Path
+          dotnet ISCSIConsole.Tests/bin/Release/net10.0/ISCSIConsole.Tests.dll 2>&1 | Tee-Object -FilePath artifacts/headless-test-output.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Upload headless test log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: iSCSIConsole-headless-test-log-${{ github.run_id }}
+          path: artifacts/headless-test-output.log
+          if-no-files-found: warn
+
       - name: Merge single executable
         shell: pwsh
         run: |
@@ -92,17 +120,27 @@ jobs:
         run: |
           Copy-Item -LiteralPath License.txt -Destination artifacts/iSCSIConsole-net472/
           Copy-Item -LiteralPath Readme.md -Destination artifacts/iSCSIConsole-net472/
+          Copy-Item -LiteralPath License.txt -Destination artifacts/iSCSIConsole-headless-win-x64/
+          Copy-Item -LiteralPath Readme.md -Destination artifacts/iSCSIConsole-headless-win-x64/
 
       - name: Create archive
         shell: pwsh
         run: |
           Compress-Archive -Path artifacts/iSCSIConsole-net472/* -DestinationPath artifacts/iSCSIConsole-net472.zip -Force
+          Compress-Archive -Path artifacts/iSCSIConsole-headless-win-x64/* -DestinationPath artifacts/iSCSIConsole-headless-win-x64.zip -Force
 
       - name: Upload package
         uses: actions/upload-artifact@v4
         with:
           name: iSCSIConsole-net472
           path: artifacts/iSCSIConsole-net472.zip
+          if-no-files-found: error
+
+      - name: Upload self-contained headless package
+        uses: actions/upload-artifact@v4
+        with:
+          name: iSCSIConsole-headless-win-x64
+          path: artifacts/iSCSIConsole-headless-win-x64.zip
           if-no-files-found: error
 
       - name: Update latest tag
@@ -119,7 +157,15 @@ jobs:
           tag_name: latest
           target_commitish: ${{ github.sha }}
           name: Latest iSCSI Console build
-          body: Public Windows build generated from commit ${{ github.sha }}.
-          files: artifacts/iSCSIConsole-net472.zip
+          body: |
+            Build 1.5.9 from commit ${{ github.sha }}.
+
+            - net472: existing Windows GUI and command-line version; requires .NET Framework 4.7.2.
+            - headless-win-x64: command-line version with its own .NET 10 runtime, no .NET installation or WinForms required. This is self-contained, not NativeAOT. Windows 10/11 and corresponding Server systems; minimal WinPE compatibility depends on the PE components and requires testing.
+
+            Fixes image-open handle leaks and incomplete reads; reduces read-cache node allocation and disabled-log overhead. Existing BSCX command-line options are preserved. No write-back cache or promised throughput multiplier.
+          files: |
+            artifacts/iSCSIConsole-net472.zip
+            artifacts/iSCSIConsole-headless-win-x64.zip
           overwrite_files: true
           make_latest: true

@@ -505,7 +505,10 @@ namespace SCSI
 
         public void Log(Severity severity, string message, params object[] args)
         {
-            Log(severity, String.Format(message, args));
+            if (OnLogEntry != null)
+            {
+                Log(severity, String.Format(message, args));
+            }
         }
 
         public List<Disk> Disks

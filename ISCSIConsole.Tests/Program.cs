@@ -67,12 +67,13 @@ namespace ISCSIConsole.Tests
             public int FlushCount { get; private set; }
             public int ReadCount { get; private set; }
             public int LastReadSectorCount { get; private set; }
+            public bool ReturnShortRead { get; set; }
 
             public override byte[] ReadSectors(long sectorIndex, int sectorCount)
             {
                 ReadCount++;
                 LastReadSectorCount = sectorCount;
-                byte[] result = new byte[sectorCount * BytesPerSector];
+                byte[] result = new byte[sectorCount * BytesPerSector - (ReturnShortRead ? BytesPerSector : 0)];
                 Buffer.BlockCopy(m_data, checked((int)(sectorIndex * BytesPerSector)), result, 0, result.Length);
                 return result;
             }
@@ -101,6 +102,9 @@ namespace ISCSIConsole.Tests
                 RunTest("SCSI flush and FUA", TestScsiFlushAndFua);
                 RunTest("READ/WRITE12 and cache", TestReadWrite12AndCacheInvalidation);
                 RunTest("sequential cache read coalescing", TestSequentialCacheReadCoalescing);
+                RunTest("cache eviction and short read rejection", TestCacheEvictionAndShortRead);
+                RunTest("VHD logical short read rejection", TestLogicalShortRead);
+                RunTest("failed image open releases handles", TestFailedOpenReleasesHandles);
                 RunTest("single-client gate", TestSingleClientGate);
                 RunTest("initiator-name gate", TestInitiatorNameGate);
                 RunTest("80-target worker lifecycle", TestTargetWorkerLifecycle);
@@ -108,6 +112,10 @@ namespace ISCSIConsole.Tests
                 RunTest("concurrent management pipe", TestConcurrentManagementPipe);
                 RunTest("VHDX durable flush", TestVhdxDurableFlush);
                 RunTest("VHDX child-only writes", TestVhdxDifferencingWritesOnlyChild);
+                if (!String.IsNullOrEmpty(Environment.GetEnvironmentVariable("ISCSI_CONSOLE_EXE")))
+                {
+                    RunTest("published headless command and TCP read/write", TestPublishedHeadless);
+                }
                 Console.WriteLine("ALL_TESTS_PASSED");
                 return 0;
             }
@@ -238,6 +246,151 @@ namespace ISCSIConsole.Tests
 
             cached.ReadSectors(sectorsPerCacheBlock * 7, 1);
             Assert(inner.ReadCount == 1, "coalesced blocks remain cached");
+        }
+
+        private static void TestCacheEvictionAndShortRead()
+        {
+            MemoryDisk inner = new MemoryDisk();
+            ISCSIConsole.CachedDisk cached = new ISCSIConsole.CachedDisk(inner, 1);
+            int blockSectors = ISCSIConsole.CachedDisk.DefaultBlockSizeKB * 1024 / inner.BytesPerSector;
+            for (int round = 0; round < 8; round++)
+            {
+                for (int block = 0; block < 32; block += 8)
+                {
+                    cached.WriteSectors(block * blockSectors, FilledSector((byte)(round + block)));
+                    byte[] read = cached.ReadSectors(block * blockSectors, 8 * blockSectors);
+                    Assert(read[0] == (byte)(round + block), "eviction does not return stale data");
+                }
+            }
+            Assert(cached.GetStatistics().Contains("cachedMB=1.0"), "full cache remains within its budget");
+            MemoryDisk shortDisk = new MemoryDisk();
+            shortDisk.ReturnShortRead = true;
+            try
+            {
+                new ISCSIConsole.CachedDisk(shortDisk, 1).ReadSectors(0, 1);
+                throw new InvalidOperationException("Incomplete cache read was accepted");
+            }
+            catch (EndOfStreamException) { }
+        }
+
+        private static void TestLogicalShortRead()
+        {
+            foreach (Type type in new Type[] { typeof(VhdDiskImage), typeof(VhdxDiskImage) })
+            {
+                System.Reflection.MethodInfo read = type.GetMethod("ReadExactly", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+                using (MemoryStream stream = new MemoryStream(new byte[512]))
+                {
+                    try
+                    {
+                        read.Invoke(null, new object[] { stream, new byte[1024], 0, 1024 });
+                        throw new InvalidOperationException("Unexpected EOF returned as successful zero data");
+                    }
+                    catch (System.Reflection.TargetInvocationException ex)
+                    {
+                        Assert(ex.InnerException is EndOfStreamException, "incomplete logical read raises an I/O error");
+                    }
+                }
+            }
+        }
+
+        private static void TestFailedOpenReleasesHandles()
+        {
+            string directory = Path.Combine(Path.GetTempPath(), "ISCSIConsole.Tests.Open." + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(directory);
+            try
+            {
+                foreach (string extension in new string[] { ".vhd", ".vhdx" })
+                {
+                    string path = Path.Combine(directory, "invalid" + extension);
+                    File.WriteAllBytes(path, new byte[1024 * 1024]);
+                    for (int attempt = 0; attempt < 3; attempt++)
+                    {
+                        try
+                        {
+                            if (extension == ".vhd") { new VhdDiskImage(path, false).ReleaseLock(); }
+                            else { new VhdxDiskImage(path, false).ReleaseLock(); }
+                            throw new InvalidOperationException("Invalid image unexpectedly opened");
+                        }
+                        catch (IOException) { }
+                        // No GC is needed to recover file handles from failed opens.
+                        using (FileStream stream = new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None)) { }
+                    }
+                }
+            }
+            finally { Directory.Delete(directory, true); }
+        }
+
+        private static System.Diagnostics.Process StartPublished(string exe, string arguments)
+        {
+            System.Diagnostics.ProcessStartInfo start = new System.Diagnostics.ProcessStartInfo(exe, arguments);
+            start.UseShellExecute = false;
+            start.CreateNoWindow = true;
+            start.EnvironmentVariables["DOTNET_ROOT"] = Path.Combine(Path.GetTempPath(), "no-installed-dotnet");
+            start.EnvironmentVariables["DOTNET_MULTILEVEL_LOOKUP"] = "0";
+            return System.Diagnostics.Process.Start(start);
+        }
+
+        private static void PublishedCommand(string exe, string arguments)
+        {
+            using (System.Diagnostics.Process process = StartPublished(exe, arguments))
+            {
+                if (!process.WaitForExit(10000)) { process.Kill(); throw new TimeoutException("Published command timed out: " + arguments); }
+                Assert(process.ExitCode == 0, "published command: " + arguments);
+            }
+        }
+
+        private static void TestPublishedHeadless()
+        {
+            string exe = Environment.GetEnvironmentVariable("ISCSI_CONSOLE_EXE");
+            string directory = Path.Combine(Path.GetTempPath(), "ISCSIConsole.Tests.Exe." + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(directory);
+            string configPath = Path.Combine(directory, "targets.xml");
+            string statusPath = Path.Combine(directory, "ready.txt");
+            string diskPath = Path.Combine(directory, "disk.vhdx");
+            string configArgument = " /config \"" + configPath + "\"";
+            System.Diagnostics.Process service = null;
+            try
+            {
+                System.Net.Sockets.TcpListener portProbe = new System.Net.Sockets.TcpListener(IPAddress.Loopback, 0);
+                portProbe.Start();
+                int port = ((IPEndPoint)portProbe.LocalEndpoint).Port;
+                portProbe.Stop();
+                ServiceConfiguration configuration = new ServiceConfiguration();
+                configuration.ListenAddress = "127.0.0.1";
+                configuration.Port = port;
+                configuration.Save(configPath);
+                VhdxDiskImage image = VhdxDiskImage.CreateDynamicDisk(diskPath, 64L * 1024 * 1024);
+                image.WriteSectors(2048, FilledSector(0x37));
+                image.Flush();
+                image.ReleaseLock();
+                service = StartPublished(exe, "/start" + configArgument + " /status \"" + statusPath + "\"");
+                DateTime deadline = DateTime.UtcNow.AddSeconds(12);
+                while (DateTime.UtcNow < deadline && !service.HasExited && !File.Exists(statusPath)) { Thread.Sleep(100); }
+                Assert(File.Exists(statusPath) && File.ReadAllText(statusPath).StartsWith("READY"), "published service ready without installed runtime");
+                PublishedCommand(exe, "/addtarget \"" + diskPath + "\" test /cachemb 1 /nosave" + configArgument);
+                PublishedCommand(exe, "/list" + configArgument);
+                ISCSI.Client.ISCSIDisk remote = new ISCSI.Client.ISCSIDisk();
+                try
+                {
+                    Assert(remote.Connect(IPAddress.Loopback, port, "iqn.1991-05.com.microsoft:test", 0), "published iSCSI login");
+                    Assert(remote.ReadSectors(2048, 1)[0] == 0x37, "published VHDX sector read");
+                    remote.WriteSectors(2048, FilledSector(0x72));
+                    Assert(remote.ReadSectors(2048, 1)[0] == 0x72, "published VHDX write invalidates cache");
+                }
+                finally { remote.Disconnect(); }
+                PublishedCommand(exe, "/save" + configArgument);
+                PublishedCommand(exe, "/removetarget test /force /nosave" + configArgument);
+                VhdxDiskImage reopened = new VhdxDiskImage(diskPath, true);
+                try { Assert(reopened.ReadSectors(2048, 1)[0] == 0x72, "published target removal flushes data"); }
+                finally { reopened.ReleaseLock(); }
+                PublishedCommand(exe, "/stop" + configArgument);
+                Assert(service.WaitForExit(5000) && service.ExitCode == 0, "published service stops cleanly");
+            }
+            finally
+            {
+                if (service != null) { if (!service.HasExited) { service.Kill(); service.WaitForExit(5000); } service.Dispose(); }
+                Directory.Delete(directory, true);
+            }
         }
 
         private static void TestSingleClientGate()

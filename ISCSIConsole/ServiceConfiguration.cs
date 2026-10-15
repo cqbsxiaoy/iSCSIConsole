@@ -26,6 +26,10 @@ namespace ISCSIConsole
 
         public static string GetDefaultPath()
         {
+#if NETCOREAPP
+            // Assembly.Location is empty in a self-contained single-file app.
+            return Path.Combine(AppContext.BaseDirectory, DefaultFileName);
+#else
             Assembly entryAssembly = Assembly.GetEntryAssembly();
             string assemblyLocation = entryAssembly != null ? entryAssembly.Location : typeof(ServiceConfiguration).Assembly.Location;
             string directory = Path.GetDirectoryName(assemblyLocation);
@@ -34,6 +38,7 @@ namespace ISCSIConsole
                 directory = AppDomain.CurrentDomain.BaseDirectory;
             }
             return Path.Combine(directory, DefaultFileName);
+#endif
         }
 
         public static ServiceConfiguration Load(string path)
