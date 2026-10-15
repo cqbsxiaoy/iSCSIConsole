@@ -32,6 +32,7 @@
     <Compile Include="../ISCSIConsole/Helpers/LockUtils.cs" Link="Helpers/LockUtils.cs" />
     <Compile Include="../ISCSIConsole/Win32/VolumeInfo.cs" Link="Win32/VolumeInfo.cs" />
     <ProjectReference Include="../ISCSI/ISCSI.csproj" />
+    <ProjectReference Include="../Utilities/Utilities.csproj" />
     <PackageReference Include="DiskAccessLibrary.Win32" Version="1.6.3" />
     <PackageReference Include="DiscUtils.Vhd" Version="0.16.13" />
     <PackageReference Include="DiscUtils.Vhdx" Version="0.16.13" />
