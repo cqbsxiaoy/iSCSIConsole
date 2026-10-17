@@ -10,16 +10,7 @@ This fork / 本分支更新
 1.5.9：BSCX 无盘与便携服务版
 --------------------------
 
-本次提供两个包，命令行和管理管道协议保持一致：
-
-| 下载包 | 使用环境 |
-| --- | --- |
-| `iSCSIConsole-net472.zip` | 原图形界面和命令行；需要 .NET Framework 4.7.2，适合既有 Windows 环境。 |
-| `iSCSIConsole-headless-win-x64.zip` | 无界面 x64 单文件，自带 .NET 10 运行时，无需安装 .NET，也不依赖 WinForms；适合受支持的 Windows 10/11 和对应 Server。 |
-
-无界面包解压后的 `ISCSIConsole.exe` 可以用于 BSCX 的 `share` 目录，继续使用原来的 `/start`、`/addtarget`、`/removetarget /force`、`/list`、`/save`、`/stop` 等参数。直接双击只显示帮助，不打开图形窗口。BSCX 的调用代码无需改动。
-
-这里的免安装版是 **self-contained**：运行时随 EXE 携带，并非完全不含 .NET 的 NativeAOT 程序；文件明显大于 Framework 版，首次运行会解包运行时原生组件到临时目录（需要可写空间）。可用 `DOTNET_BUNDLE_EXTRACT_BASE_DIR` 指定解包目录。不需要给 PE 安装 .NET 可选组件，但不能承诺所有精简 PE 都可运行：仍需 x64 系统 API、网络、可读写文件系统等。尤其旧版、删减组件的 PE 要实际验证；Windows 7/8.1、32 位 PE 不适用此包。
+当前发布包为 `iSCSIConsole-net472.zip`，命令行和管理管道协议保持一致，需要 Windows .NET Framework 4.7.2，适合已有 Windows 环境。BSCX 的 PE 场景使用软件包内配套的轻量 Mono 运行环境，不在本仓库发布体积较大的自带运行时版本。
 
 本次有明确依据的稳定性与性能改进：
 
